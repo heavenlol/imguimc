@@ -1,1 +1,1 @@
-- Add support for 26.2-snapshot-8
+- Fix incorrect glsl for lower OpenGL drivers

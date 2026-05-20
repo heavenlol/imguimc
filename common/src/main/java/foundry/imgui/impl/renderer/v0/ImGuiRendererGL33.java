@@ -567,7 +567,7 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
 
     protected String vertexShaderGlsl130() {
         return """
-                #version 130 core
+                #version 130
                 uniform mat4 ProjMtx;
                 in vec2 Position;
                 in vec2 UV;
@@ -603,7 +603,7 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
 
     protected String fragmentShaderGlsl130() {
         return """
-                #version 130 core
+                #version 130
                 uniform sampler2D Texture;
                 in vec2 Frag_UV;
                 in vec4 Frag_Color;
