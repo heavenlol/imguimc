@@ -15,13 +15,20 @@ public class ImGuiTestMod implements ClientModInitializer {
                 if (ctx != null) {
                     ctx.io().addConfigFlags(
                             ImGuiConfigFlags.NavEnableKeyboard |
-                            ImGuiConfigFlags.NavEnableGamepad |
-                            ImGuiConfigFlags.NavEnableSetMousePos |
-                            ImGuiConfigFlags.DockingEnable |
-                            ImGuiConfigFlags.ViewportsEnable);
+                                    ImGuiConfigFlags.NavEnableGamepad |
+                                    ImGuiConfigFlags.NavEnableSetMousePos |
+                                    ImGuiConfigFlags.DockingEnable |
+                                    ImGuiConfigFlags.ViewportsEnable);
                 }
             }
         });
-        ImGuiMCEvents.INSTANCE.preRenderImGuiEvent(ImGui::showDemoWindow);
+        ImGuiMCEvents.INSTANCE.preRenderImGuiEvent(() -> {
+            ImGui.showDemoWindow();
+            ImGui.showMetricsWindow();
+            if (ImGui.begin("Test dock")) {
+                ImGui.dockSpace(1);
+            }
+            ImGui.end();
+        });
     }
 }

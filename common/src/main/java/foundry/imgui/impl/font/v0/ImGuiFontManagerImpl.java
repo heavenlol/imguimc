@@ -2,7 +2,6 @@ package foundry.imgui.impl.font.v0;
 
 //? if <1.21.4 {
 
-import static org.lwjgl.glfw.GLFW.*;
 import foundry.imgui.api.ImGuiMC;
 import foundry.imgui.impl.ImGuiMCImpl;
 import foundry.imgui.impl.font.ImGuiFontManager;
@@ -11,7 +10,6 @@ import imgui.ImFont;
 import imgui.ImFontAtlas;
 import imgui.ImFontConfig;
 import imgui.ImGui;
-import net.minecraft.client.Minecraft;
 import net.minecraft.resources.FileToIdConverter;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
@@ -19,12 +17,9 @@ import net.minecraft.server.packs.resources.ResourceManager;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.NativeResource;
-
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.FloatBuffer;
 import java.text.DecimalFormat;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -68,10 +63,12 @@ public class ImGuiFontManagerImpl implements ImGuiFontManager {
     @Override
     public CompletableFuture<Void> reload(final PreparationBarrier preparationBarrier, @NotNull final ResourceManager resourceManager, @NotNull final Executor backgroundExecutor, @NotNull final Executor gameExecutor) {
     *///? } else {
-        @NotNull
-        @Override
-        public CompletableFuture<Void> reload(final PreparationBarrier preparationBarrier, @NotNull final ResourceManager resourceManager, @NotNull final net.minecraft.util.profiling.ProfilerFiller preparationsProfiler, @NotNull final net.minecraft.util.profiling.ProfilerFiller reloadProfiler, @NotNull final Executor backgroundExecutor, @NotNull final Executor gameExecutor) {
-    //? }
+    @NotNull
+    @Override
+    public CompletableFuture<Void> reload(final PreparationBarrier preparationBarrier, @NotNull final ResourceManager resourceManager,
+                                          @NotNull final net.minecraft.util.profiling.ProfilerFiller preparationsProfiler, @NotNull final net.minecraft.util.profiling.ProfilerFiller reloadProfiler,
+                                          @NotNull final Executor backgroundExecutor, @NotNull final Executor gameExecutor) {
+        //? }
 
         return CompletableFuture.supplyAsync(() -> {
             final Map<ResourceLocation, FontData> fontData = new HashMap<>();
@@ -115,8 +112,7 @@ public class ImGuiFontManagerImpl implements ImGuiFontManager {
                     case "regular" -> fontBuilders.computeIfAbsent(name, FontPackBuilder::new).main = entry.getValue();
                     case "italic" -> fontBuilders.computeIfAbsent(name, FontPackBuilder::new).italic = entry.getValue();
                     case "bold" -> fontBuilders.computeIfAbsent(name, FontPackBuilder::new).bold = entry.getValue();
-                    case "bold_italic" ->
-                            fontBuilders.computeIfAbsent(name, FontPackBuilder::new).boldItalic = entry.getValue();
+                    case "bold_italic" -> fontBuilders.computeIfAbsent(name, FontPackBuilder::new).boldItalic = entry.getValue();
                     default -> ImGuiMCImpl.LOGGER.warn("Unknown font type {} for font: {}", type, name);
                 }
             }
@@ -135,38 +131,24 @@ public class ImGuiFontManagerImpl implements ImGuiFontManager {
 
     @Override
     public void rebuildFonts(final ImFontAtlas atlas) {
-        float scale;
-        try (final MemoryStack stack = MemoryStack.stackPush()) {
-            final Map<ResourceLocation, FontPack> fonts = new HashMap<>();
+        final Map<ResourceLocation, FontPack> fonts = new HashMap<>();
 
-            atlas.clear();
+        atlas.clear();
 
-            final FloatBuffer xscale = stack.mallocFloat(1);
-            final FloatBuffer yscale = stack.mallocFloat(1);
-            glfwGetMonitorContentScale(glfwGetPrimaryMonitor(), xscale, yscale);
-
-            scale = Math.max(xscale.get(0), yscale.get(0));
-            // Hack because macs and wayland seem to report massive values for some reason
-            final int platform = glfwGetPlatform();
-            if (platform == GLFW_PLATFORM_COCOA || platform == GLFW_PLATFORM_WAYLAND) {
-                scale /= 2;
-            }
-            scale = Math.max(1.0F, scale);
-
-            for (final Map.Entry<ResourceLocation, FontPackBuilder> entry : this.fontBuilders.entrySet()) {
-                ImGuiMCImpl.LOGGER.info("Built {}", entry.getKey());
-                fonts.put(entry.getKey(), entry.getValue().build(scale));
-            }
-
-            this.fonts = Map.copyOf(fonts);
-            this.defaultFont = this.getFont(ImGuiMC.FONT_DEFAULT, false, false);
-            if (this.defaultFont == null) {
-                ImGuiMCImpl.LOGGER.error("Failed to load default font: {}, using ImGui default", ImGuiMC.FONT_DEFAULT);
-                this.defaultFont = atlas.addFontDefault();
-            }
-
-            ImGui.getIO().setFontDefault(this.defaultFont);
+        final float scale = ImGuiFontManager.getFontScale();
+        for (final Map.Entry<ResourceLocation, FontPackBuilder> entry : this.fontBuilders.entrySet()) {
+            ImGuiMCImpl.LOGGER.info("Built {}", entry.getKey());
+            fonts.put(entry.getKey(), entry.getValue().build(scale));
         }
+
+        this.fonts = Map.copyOf(fonts);
+        this.defaultFont = this.getFont(ImGuiMC.FONT_DEFAULT, false, false);
+        if (this.defaultFont == null) {
+            ImGuiMCImpl.LOGGER.error("Failed to load default font: {}, using ImGui default", ImGuiMC.FONT_DEFAULT);
+            this.defaultFont = atlas.addFontDefault();
+        }
+
+        ImGui.getIO().setFontDefault(this.defaultFont);
 
         ImGuiMCPlatform.INSTANCE.registerImGuiFonts(atlas, this.defaultFont, scale);
     }

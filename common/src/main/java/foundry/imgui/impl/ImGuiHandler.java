@@ -6,9 +6,11 @@ import foundry.imgui.impl.font.ImGuiFontManager;
 import foundry.imgui.impl.platform.ImGuiMCPlatform;
 import foundry.imgui.impl.renderer.ImGuiRenderer;
 import imgui.ImGui;
+import imgui.ImGuiStyle;
 import imgui.extension.implot.ImPlot;
 import imgui.extension.implot.ImPlotContext;
 import imgui.flag.ImGuiConfigFlags;
+import imgui.flag.ImGuiStyleVar;
 import imgui.internal.ImGuiContext;
 import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.ApiStatus;
@@ -46,7 +48,7 @@ public class ImGuiHandler {
             this.fontsDirty = new AtomicBoolean();
             ImGuiMCPlatform.INSTANCE.imGuiLoadPre();
             this.rendererImpl.init();
-            this.windowImpl.init(mainWindow, true);
+            this.windowImpl.initForOpenGL(mainWindow, true);
             ImGuiMCPlatform.INSTANCE.imGuiLoadPost();
 
             // TODO style sheet init event
@@ -103,6 +105,7 @@ public class ImGuiHandler {
             }
             this.rendererImpl.newFrame();
             this.windowImpl.newFrame(ImGuiMCImpl.getMainRenderTarget());
+            ImGui.getStyle().setFontScaleMain((float) Math.max(ImGuiFontManager.getFontScale(), Minecraft.getInstance().getWindow().getGuiScale() / 2.0));
             ImGui.newFrame();
 
             ImGuiMCPlatform.INSTANCE.drawImGuiPre();

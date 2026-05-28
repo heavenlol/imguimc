@@ -23,7 +23,7 @@ import java.nio.IntBuffer;
 
 /**
  * This class is a straightforward port of the
- * <a href="https://raw.githubusercontent.com/ocornut/imgui/1ee252772ae9c0a971d06257bb5c89f628fa696a/backends/imgui_impl_opengl3.cpp">imgui_impl_opengl3.cpp</a>.
+ * <a href="https://raw.githubusercontent.com/ocornut/imgui/32f4c234a8edd9a85b32a91c9e29afac15c50028/backends/imgui_impl_opengl3.cpp">imgui_impl_opengl3.cpp</a>.
  * <p>
  * It does support a backup and restoring of the GL state in the same way the original Dear ImGui code does.
  * Some of the very specific OpenGL variables may be ignored here,
@@ -37,9 +37,11 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
      * Same as {@code ImGui_ImplOpenGL3_Data}.
      */
     protected static class Data {
-        protected int glVersion;
+        protected int glVersion = 0; // Extracted at runtime using GL_MAJOR_VERSION, GL_MINOR_VERSION queries (e.g. 320 for GL 3.2)
+        protected boolean glProfileIsES3;
         protected boolean glProfileIsCompat;
         protected int glProfileMask;
+        protected int maxTextureSize;
         protected int fontTexture = 0;
         protected int shaderHandle = 0;
         protected int attribLocationTex = 0; // Uniforms location
@@ -51,7 +53,8 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
         protected int elementsHandle = 0;
         // protected int vertexBufferSize;
         // protected int indexBufferSize;
-        // protected boolean hasPolygonMode;
+        protected boolean hasPolygonMode;
+        protected boolean hasBindSampler;
         protected boolean hasClipOrigin;
     }
 
@@ -100,31 +103,46 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
         final ImGuiIO io = ImGui.getIO();
         io.setBackendRendererName("imgui-java_impl_opengl3");
 
-        {
+        { // Desktop or GLES 3
+            final String glVersion = glGetString(GL_VERSION);
             int major = glGetInteger(GL_MAJOR_VERSION);
             int minor = glGetInteger(GL_MINOR_VERSION);
             if (major == 0 && minor == 0) {
                 // Query GL_VERSION in desktop GL 2.x, the string will start with "<major>.<minor>"
-                final String glVersion = glGetString(GL_VERSION);
                 if (glVersion != null) {
                     final String[] glVersions = glVersion.split("\\.");
                     major = Integer.parseInt(glVersions[0]);
                     minor = Integer.parseInt(glVersions[1]);
                 }
             }
-
             this.data.glVersion = major * 100 + minor * 10;
-            this.data.hasClipOrigin = this.data.glVersion >= 450;
+            this.data.maxTextureSize = glGetInteger(GL_MAX_TEXTURE_SIZE);
 
-            this.data.glProfileMask = glGetInteger(GL_CONTEXT_PROFILE_MASK);
+            // Some Mesa/EGL desktop drivers expose an ES3 context whose GL_VERSION starts with "OpenGL ES 3".
+            // Mirror upstream's runtime detection so the gates below match the C++ behavior on such configurations.
+            if (glVersion != null && glVersion.startsWith("OpenGL ES 3")) {
+                this.data.glProfileIsES3 = true;
+            }
+
+            // Upstream changelog 2023-06-20 (#6539): only query GL_CONTEXT_PROFILE_MASK on desktop GL >= 3.2.
+            if (!this.data.glProfileIsES3 && this.data.glVersion >= 320) {
+                this.data.glProfileMask = glGetInteger(GL_CONTEXT_PROFILE_MASK);
+            }
             this.data.glProfileIsCompat = (this.data.glProfileMask & GL_CONTEXT_COMPATIBILITY_PROFILE_BIT) != 0;
         }
 
         // We can honor the ImDrawCmd::VtxOffset field, allowing for large meshes.
         io.addBackendFlags(ImGuiBackendFlags.RendererHasVtxOffset);
 
+        // In C++: io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures — the renderer drives per-frame ImTextureData uploads.
+        // In Java: ImTextureData is not exposed in imgui-binding yet, so we keep the legacy createFontsTexture path
+        //          and intentionally do not advertise the flag (follow-up: expose ImTextureData in the binding).
+
         // We can create multi-viewports on the Renderer side (optional)
         io.addBackendFlags(ImGuiBackendFlags.RendererHasViewports);
+
+        // In C++: platform_io.Renderer_TextureMaxWidth = platform_io.Renderer_TextureMaxHeight = bd->MaxTextureSize.
+        // In Java: setters are not exposed on ImGuiPlatformIO in imgui-binding (follow-up). data.maxTextureSize is queried above for parity.
 
         // Make an arbitrary GL call (we don't actually need the result)
         // IF YOU GET A CRASH HERE: it probably means the OpenGL function loader didn't do its job. Let us know!
@@ -132,6 +150,14 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
             final int[] currentTexture = new int[1];
             glGetIntegerv(GL_TEXTURE_BINDING_2D, currentTexture);
         }
+
+        // Detect extensions we support
+        this.data.hasPolygonMode = !this.data.glProfileIsES3; // ES2 cannot occur in this binding (desktop GL only).
+        this.data.hasBindSampler = this.data.glVersion >= 330 || this.data.glProfileIsES3;
+        this.data.hasClipOrigin = this.data.glVersion >= 450;
+        // In C++: scans GL_NUM_EXTENSIONS for "GL_ARB_clip_control" to also enable hasClipOrigin on pre-4.5 contexts.
+        // In Java: omitted to avoid behavior drift versus the existing port (follow-up: honor the extension probe via glGetStringi).
+
 
         if (ImGui.getIO().hasConfigFlags(ImGuiConfigFlags.ViewportsEnable)) {
             this.initPlatformInterface();
@@ -146,6 +172,8 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
         this.destroyDeviceObjects();
 
         io.setBackendRendererName(null);
+        // In C++: io.BackendFlags also clears RendererHasTextures, then platform_io.ClearRendererHandlers() runs.
+        // In Java: RendererHasTextures is never set (see init), and ClearRendererHandlers is not exposed in imgui-binding (follow-up).
         io.removeBackendFlags(ImGuiBackendFlags.RendererHasVtxOffset | ImGuiBackendFlags.RendererHasViewports);
         this.data = null;
     }
@@ -170,8 +198,12 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
         glDisable(GL_STENCIL_TEST);
         glEnable(GL_SCISSOR_TEST);
 
-        glDisable(GL_PRIMITIVE_RESTART);
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        if (!this.data.glProfileIsES3 && this.data.glVersion >= 310) {
+            glDisable(GL_PRIMITIVE_RESTART);
+        }
+        if (this.data.hasPolygonMode) {
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        }
 
         // Support for GL 4.5 rarely used glClipControl(GL_UPPER_LEFT)
         boolean clipOriginLowerLeft = true;
@@ -210,7 +242,9 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
         glUniform1i(this.data.attribLocationTex, 0);
         glUniformMatrix4fv(this.data.attribLocationProjMtx, false, this.props.orthoProjMatrix);
 
-        glBindSampler(0, 0);
+        if (this.data.hasBindSampler) {
+            glBindSampler(0, 0); // We use combined texture/sampler state. Applications using GL 3.3 and GL ES 3.0 may set that otherwise.
+        }
 
         glBindVertexArray(gVertexArrayObject);
 
@@ -238,14 +272,22 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
             return;
         }
 
+        // In C++: iterates draw_data->Textures and calls ImGui_ImplOpenGL3_UpdateTexture for each non-OK status.
+        // In Java: ImTextureData is not exposed in imgui-binding (follow-up); we keep the legacy createFontsTexture
+        //          path triggered from newFrame(), so dynamic atlas updates are not honored here yet.
+
         glGetIntegerv(GL_ACTIVE_TEXTURE, this.props.lastActiveTexture);
         glActiveTexture(GL_TEXTURE0);
         glGetIntegerv(GL_CURRENT_PROGRAM, this.props.lastProgram);
         glGetIntegerv(GL_TEXTURE_BINDING_2D, this.props.lastTexture);
-        glGetIntegerv(GL_SAMPLER_BINDING, this.props.lastSampler);
+        if (this.data.hasBindSampler) {
+            glGetIntegerv(GL_SAMPLER_BINDING, this.props.lastSampler);
+        }
         glGetIntegerv(GL_ARRAY_BUFFER_BINDING, this.props.lastArrayBuffer);
         glGetIntegerv(GL_VERTEX_ARRAY_BINDING, this.props.lastVertexArrayObject);
-        glGetIntegerv(GL_POLYGON_MODE, this.props.lastPolygonMode);
+        if (this.data.hasPolygonMode) {
+            glGetIntegerv(GL_POLYGON_MODE, this.props.lastPolygonMode);
+        }
         glGetIntegerv(GL_VIEWPORT, this.props.lastViewport);
         glGetIntegerv(GL_SCISSOR_BOX, this.props.lastScissorBox);
         glGetIntegerv(GL_BLEND_SRC_RGB, this.props.lastBlendSrcRgb);
@@ -259,7 +301,9 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
         this.props.lastEnableDepthTest = glIsEnabled(GL_DEPTH_TEST);
         this.props.lastEnableStencilTest = glIsEnabled(GL_STENCIL_TEST);
         this.props.lastEnableScissorTest = glIsEnabled(GL_SCISSOR_TEST);
-        this.props.lastEnablePrimitiveRestart = glIsEnabled(GL_PRIMITIVE_RESTART);
+        if (!this.data.glProfileIsES3 && this.data.glVersion >= 310) {
+            this.props.lastEnablePrimitiveRestart = glIsEnabled(GL_PRIMITIVE_RESTART);
+        }
 
         // Setup desired GL state
         // Recreate the VAO every time (this is to easily allow multiple GL contexts to be rendered to. VAO are not shared among GL contexts)
@@ -291,6 +335,8 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
             // glBufferSubData(GL_ARRAY_BUFFER, 0, drawData.getCmdListVtxBufferData(n));
             // glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, drawData.getCmdListIdxBufferData(n));
 
+            // In C++: also has an UseBufferSubData branch (orphaning + glBufferSubData).
+            // In Java: upstream forces UseBufferSubData = false, so we mirror only the glBufferData path here.
             glBufferData(GL_ARRAY_BUFFER, drawData.getCmdListVtxBufferData(n), GL_STREAM_DRAW);
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, drawData.getCmdListIdxBufferData(n), GL_STREAM_DRAW);
 
@@ -322,7 +368,12 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
                 final int type = ImDrawData.sizeOfImDrawIdx() == 2 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
 
                 glBindTexture(GL_TEXTURE_2D, (int) textureId);
-                glDrawElementsBaseVertex(GL_TRIANGLES, elemCount, type, indices, vtxOffset);
+
+                if (this.data.glVersion >= 320) {
+                    glDrawElementsBaseVertex(GL_TRIANGLES, elemCount, type, indices, vtxOffset);
+                } else {
+                    glDrawElements(GL_TRIANGLES, elemCount, type, indices);
+                }
             }
         }
 
@@ -335,7 +386,9 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
             glUseProgram(this.props.lastProgram[0]);
         }
         glBindTexture(GL_TEXTURE_2D, this.props.lastTexture[0]);
-        glBindSampler(0, this.props.lastSampler[0]);
+        if (this.data.hasBindSampler) {
+            glBindSampler(0, this.props.lastSampler[0]);
+        }
         glActiveTexture(this.props.lastActiveTexture[0]);
         glBindVertexArray(this.props.lastVertexArrayObject[0]);
         glBindBuffer(GL_ARRAY_BUFFER, this.props.lastArrayBuffer[0]);
@@ -366,19 +419,25 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
         } else {
             glDisable(GL_SCISSOR_TEST);
         }
-        if (this.props.lastEnablePrimitiveRestart) {
-            glEnable(GL_PRIMITIVE_RESTART);
-        } else {
-            glDisable(GL_PRIMITIVE_RESTART);
+        if (!this.data.glProfileIsES3 && this.data.glVersion >= 310) {
+            if (this.props.lastEnablePrimitiveRestart) {
+                glEnable(GL_PRIMITIVE_RESTART);
+            } else {
+                glDisable(GL_PRIMITIVE_RESTART);
+            }
         }
-        if (this.data.glProfileIsCompat) {
-            glPolygonMode(GL_FRONT, this.props.lastPolygonMode[0]);
-            glPolygonMode(GL_BACK, this.props.lastPolygonMode[1]);
-        } else {
-            glPolygonMode(GL_FRONT_AND_BACK, this.props.lastPolygonMode[0]);
+        // Desktop OpenGL 3.0 and OpenGL 3.1 had separate polygon draw modes for front-facing and back-facing faces of polygons
+        if (this.data.hasPolygonMode) {
+            if (this.data.glVersion <= 310 || this.data.glProfileIsCompat) {
+                glPolygonMode(GL_FRONT, this.props.lastPolygonMode[0]);
+                glPolygonMode(GL_BACK, this.props.lastPolygonMode[1]);
+            } else {
+                glPolygonMode(GL_FRONT_AND_BACK, this.props.lastPolygonMode[0]);
+            }
         }
         glViewport(this.props.lastViewport[0], this.props.lastViewport[1], this.props.lastViewport[2], this.props.lastViewport[3]);
         glScissor(this.props.lastScissorBox[0], this.props.lastScissorBox[1], this.props.lastScissorBox[2], this.props.lastScissorBox[3]);
+
     }
 
     @Override
@@ -396,6 +455,8 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
         return texture.imguimc$id();
     }
 
+    // In C++: the legacy CreateFontsTexture has been removed in favor of UpdateTexture(WantCreate), driven by ImGuiPlatformIO::Textures.
+    // In Java: ImTextureData is not exposed in imgui-binding yet, so we keep the legacy path here (follow-up: migrate once exposed).
     public void createFontsTexture() {
         final ImFontAtlas fontAtlas = ImGui.getIO().getFonts();
 
@@ -410,6 +471,8 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
             glBindTexture(GL_TEXTURE_2D, this.data.fontTexture);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
             glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, stack.ints(GL_ONE, GL_ONE, GL_ONE, GL_RED));
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // Not on WebGL/ES
@@ -463,12 +526,17 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
     }
 
     private void createDeviceObjects() {
-        // Backup GL state
+// Backup GL state
         final int[] lastTexture = new int[1];
         final int[] lastArrayBuffer = new int[1];
+        final int[] lastPixelUnpackBuffer = new int[1];
         final int[] lastVertexArray = new int[1];
         glGetIntegerv(GL_TEXTURE_BINDING_2D, lastTexture);
         glGetIntegerv(GL_ARRAY_BUFFER_BINDING, lastArrayBuffer);
+        if (data.glVersion >= 210) {
+            glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, lastPixelUnpackBuffer);
+            glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+        }
         glGetIntegerv(GL_VERTEX_ARRAY_BINDING, lastVertexArray);
 
         // Select shaders matching our GLSL versions
@@ -487,42 +555,47 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
         final int vertHandle = glCreateShader(GL_VERTEX_SHADER);
         glShaderSource(vertHandle, vertexShader);
         glCompileShader(vertHandle);
-        this.checkShader(vertHandle, "vertex shader");
+        checkShader(vertHandle, "vertex shader");
 
         final int fragHandle = glCreateShader(GL_FRAGMENT_SHADER);
         glShaderSource(fragHandle, fragmentShader);
         glCompileShader(fragHandle);
-        this.checkShader(fragHandle, "fragment shader");
+        checkShader(fragHandle, "fragment shader");
 
         // Link
-        this.data.shaderHandle = glCreateProgram();
-        glAttachShader(this.data.shaderHandle, vertHandle);
-        glAttachShader(this.data.shaderHandle, fragHandle);
-        glLinkProgram(this.data.shaderHandle);
-        this.checkProgram(this.data.shaderHandle);
+        data.shaderHandle = glCreateProgram();
+        glAttachShader(data.shaderHandle, vertHandle);
+        glAttachShader(data.shaderHandle, fragHandle);
+        glLinkProgram(data.shaderHandle);
+        checkProgram(data.shaderHandle);
 
-        glDetachShader(this.data.shaderHandle, vertHandle);
-        glDetachShader(this.data.shaderHandle, fragHandle);
+        glDetachShader(data.shaderHandle, vertHandle);
+        glDetachShader(data.shaderHandle, fragHandle);
         glDeleteShader(vertHandle);
         glDeleteShader(fragHandle);
 
-        this.data.attribLocationTex = glGetUniformLocation(this.data.shaderHandle, "Texture");
-        this.data.attribLocationProjMtx = glGetUniformLocation(this.data.shaderHandle, "ProjMtx");
-        this.data.attribLocationVtxPos = glGetAttribLocation(this.data.shaderHandle, "Position");
-        this.data.attribLocationVtxUV = glGetAttribLocation(this.data.shaderHandle, "UV");
-        this.data.attribLocationVtxColor = glGetAttribLocation(this.data.shaderHandle, "Color");
+        data.attribLocationTex = glGetUniformLocation(data.shaderHandle, "Texture");
+        data.attribLocationProjMtx = glGetUniformLocation(data.shaderHandle, "ProjMtx");
+        data.attribLocationVtxPos = glGetAttribLocation(data.shaderHandle, "Position");
+        data.attribLocationVtxUV = glGetAttribLocation(data.shaderHandle, "UV");
+        data.attribLocationVtxColor = glGetAttribLocation(data.shaderHandle, "Color");
 
         // Create buffers
-        this.data.vboHandle = glGenBuffers();
-        this.data.elementsHandle = glGenBuffers();
+        data.vboHandle = glGenBuffers();
+        data.elementsHandle = glGenBuffers();
 
-        this.createFontsTexture();
+        // In C++: the font texture is now created lazily through ImGui_ImplOpenGL3_UpdateTexture(WantCreate),
+        //         driven by the platform_io.Textures iteration in RenderDrawData.
+        // In Java: ImTextureData is not exposed in imgui-binding (follow-up); keep the legacy createFontsTexture call here.
+        createFontsTexture();
 
         // Restore modified GL state
         glBindTexture(GL_TEXTURE_2D, lastTexture[0]);
         glBindBuffer(GL_ARRAY_BUFFER, lastArrayBuffer[0]);
+        if (data.glVersion >= 210) {
+            glBindBuffer(GL_PIXEL_UNPACK_BUFFER, lastPixelUnpackBuffer[0]);
+        }
         glBindVertexArray(lastVertexArray[0]);
-
     }
 
     private void destroyDeviceObjects() {
@@ -551,7 +624,7 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
         @Override
         public void accept(final ImGuiViewport vp) {
             if (!vp.hasFlags(ImGuiViewportFlags.NoRendererClear)) {
-                glClearColor(0, 0, 0, 0);
+                glClearColor(0, 0, 0, 1);
                 glClear(GL_COLOR_BUFFER_BIT);
             }
             ImGuiRendererGL33.this.renderDrawData(vp.getDrawData(), Minecraft.getInstance().getMainRenderTarget());
