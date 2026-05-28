@@ -50,6 +50,7 @@ public class ImGuiWindowImpl {
         protected boolean isWayland = false;
         protected boolean installedCallbacks = false;
         protected boolean callbacksChainForAllWindows = false;
+        protected boolean viewportEnable = false;
 
         // Chain GLFW callbacks: our callbacks will call the user's previously installed callbacks, if any.
         protected GLFWWindowFocusCallback prevUserCallbackWindowFocus = null;
@@ -635,9 +636,7 @@ public class ImGuiWindowImpl {
         if (IS_APPLE) {
             mainViewport.setPlatformHandleRaw(GLFWNativeCocoa.glfwGetCocoaWindow(window));
         }
-        if (io.hasConfigFlags(ImGuiConfigFlags.ViewportsEnable)) {
-            this.initPlatformInterface();
-        }
+        this.updateViewports();
 
         // In C++: on Windows a WndProc hook is registered (SetPropA "IMGUI_BACKEND_DATA" + SetWindowLongPtrW)
         //         to surface MouseSourceEvent (touch/pen) and to handle WM_NCHITTEST for NoInputs.
@@ -810,9 +809,10 @@ public class ImGuiWindowImpl {
 
         final MapButton mapButton;
         final MapAnalog mapAnalog;
+        final GLFWGamepadState gamepad = glfwHasGamepadApi ? GLFWGamepadState.malloc() : null;
 
-        if (glfwHasGamepadApi) {
-            try (final GLFWGamepadState gamepad = GLFWGamepadState.create()) {
+        try (gamepad) {
+            if (glfwHasGamepadApi) {
                 if (!glfwGetGamepadState(GLFW_JOYSTICK_1, gamepad)) {
                     return;
                 }
@@ -822,46 +822,46 @@ public class ImGuiWindowImpl {
                     v = (v - v0) / (v1 - v0);
                     io.addKeyAnalogEvent(keyNo, v > 0.10f, this.saturate(v));
                 };
+            } else {
+                final FloatBuffer axes = glfwGetJoystickAxes(GLFW_JOYSTICK_1);
+                final ByteBuffer buttons = glfwGetJoystickButtons(GLFW_JOYSTICK_1);
+                if (axes == null || axes.limit() == 0 || buttons == null || buttons.limit() == 0) {
+                    return;
+                }
+                mapButton = (keyNo, buttonNo, _unused) -> io.addKeyEvent(keyNo, (buttons.limit() > buttonNo && buttons.get(buttonNo) == GLFW_PRESS));
+                mapAnalog = (keyNo, axisNo, _unused, v0, v1) -> {
+                    float v = (axes.limit() > axisNo) ? axes.get(axisNo) : v0;
+                    v = (v - v0) / (v1 - v0);
+                    io.addKeyAnalogEvent(keyNo, v > 0.10f, this.saturate(v));
+                };
             }
-        } else {
-            final FloatBuffer axes = glfwGetJoystickAxes(GLFW_JOYSTICK_1);
-            final ByteBuffer buttons = glfwGetJoystickButtons(GLFW_JOYSTICK_1);
-            if (axes == null || axes.limit() == 0 || buttons == null || buttons.limit() == 0) {
-                return;
-            }
-            mapButton = (keyNo, buttonNo, _unused) -> io.addKeyEvent(keyNo, (buttons.limit() > buttonNo && buttons.get(buttonNo) == GLFW_PRESS));
-            mapAnalog = (keyNo, axisNo, _unused, v0, v1) -> {
-                float v = (axes.limit() > axisNo) ? axes.get(axisNo) : v0;
-                v = (v - v0) / (v1 - v0);
-                io.addKeyAnalogEvent(keyNo, v > 0.10f, this.saturate(v));
-            };
-        }
 
-        io.addBackendFlags(ImGuiBackendFlags.HasGamepad);
-        mapButton.run(ImGuiKey.GamepadStart, GLFW_GAMEPAD_BUTTON_START, 7);
-        mapButton.run(ImGuiKey.GamepadBack, GLFW_GAMEPAD_BUTTON_BACK, 6);
-        mapButton.run(ImGuiKey.GamepadFaceLeft, GLFW_GAMEPAD_BUTTON_X, 2);     // Xbox X, PS Square
-        mapButton.run(ImGuiKey.GamepadFaceRight, GLFW_GAMEPAD_BUTTON_B, 1);     // Xbox B, PS Circle
-        mapButton.run(ImGuiKey.GamepadFaceUp, GLFW_GAMEPAD_BUTTON_Y, 3);     // Xbox Y, PS Triangle
-        mapButton.run(ImGuiKey.GamepadFaceDown, GLFW_GAMEPAD_BUTTON_A, 0);     // Xbox A, PS Cross
-        mapButton.run(ImGuiKey.GamepadDpadLeft, GLFW_GAMEPAD_BUTTON_DPAD_LEFT, 13);
-        mapButton.run(ImGuiKey.GamepadDpadRight, GLFW_GAMEPAD_BUTTON_DPAD_RIGHT, 11);
-        mapButton.run(ImGuiKey.GamepadDpadUp, GLFW_GAMEPAD_BUTTON_DPAD_UP, 10);
-        mapButton.run(ImGuiKey.GamepadDpadDown, GLFW_GAMEPAD_BUTTON_DPAD_DOWN, 12);
-        mapButton.run(ImGuiKey.GamepadL1, GLFW_GAMEPAD_BUTTON_LEFT_BUMPER, 4);
-        mapButton.run(ImGuiKey.GamepadR1, GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER, 5);
-        mapAnalog.run(ImGuiKey.GamepadL2, GLFW_GAMEPAD_AXIS_LEFT_TRIGGER, 4, -0.75f, +1.0f);
-        mapAnalog.run(ImGuiKey.GamepadR2, GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER, 5, -0.75f, +1.0f);
-        mapButton.run(ImGuiKey.GamepadL3, GLFW_GAMEPAD_BUTTON_LEFT_THUMB, 8);
-        mapButton.run(ImGuiKey.GamepadR3, GLFW_GAMEPAD_BUTTON_RIGHT_THUMB, 9);
-        mapAnalog.run(ImGuiKey.GamepadLStickLeft, GLFW_GAMEPAD_AXIS_LEFT_X, 0, -0.25f, -1.0f);
-        mapAnalog.run(ImGuiKey.GamepadLStickRight, GLFW_GAMEPAD_AXIS_LEFT_X, 0, +0.25f, +1.0f);
-        mapAnalog.run(ImGuiKey.GamepadLStickUp, GLFW_GAMEPAD_AXIS_LEFT_Y, 1, -0.25f, -1.0f);
-        mapAnalog.run(ImGuiKey.GamepadLStickDown, GLFW_GAMEPAD_AXIS_LEFT_Y, 1, +0.25f, +1.0f);
-        mapAnalog.run(ImGuiKey.GamepadRStickLeft, GLFW_GAMEPAD_AXIS_RIGHT_X, 2, -0.25f, -1.0f);
-        mapAnalog.run(ImGuiKey.GamepadRStickRight, GLFW_GAMEPAD_AXIS_RIGHT_X, 2, +0.25f, +1.0f);
-        mapAnalog.run(ImGuiKey.GamepadRStickUp, GLFW_GAMEPAD_AXIS_RIGHT_Y, 3, -0.25f, -1.0f);
-        mapAnalog.run(ImGuiKey.GamepadRStickDown, GLFW_GAMEPAD_AXIS_RIGHT_Y, 3, +0.25f, +1.0f);
+            io.addBackendFlags(ImGuiBackendFlags.HasGamepad);
+            mapButton.run(ImGuiKey.GamepadStart, GLFW_GAMEPAD_BUTTON_START, 7);
+            mapButton.run(ImGuiKey.GamepadBack, GLFW_GAMEPAD_BUTTON_BACK, 6);
+            mapButton.run(ImGuiKey.GamepadFaceLeft, GLFW_GAMEPAD_BUTTON_X, 2);     // Xbox X, PS Square
+            mapButton.run(ImGuiKey.GamepadFaceRight, GLFW_GAMEPAD_BUTTON_B, 1);     // Xbox B, PS Circle
+            mapButton.run(ImGuiKey.GamepadFaceUp, GLFW_GAMEPAD_BUTTON_Y, 3);     // Xbox Y, PS Triangle
+            mapButton.run(ImGuiKey.GamepadFaceDown, GLFW_GAMEPAD_BUTTON_A, 0);     // Xbox A, PS Cross
+            mapButton.run(ImGuiKey.GamepadDpadLeft, GLFW_GAMEPAD_BUTTON_DPAD_LEFT, 13);
+            mapButton.run(ImGuiKey.GamepadDpadRight, GLFW_GAMEPAD_BUTTON_DPAD_RIGHT, 11);
+            mapButton.run(ImGuiKey.GamepadDpadUp, GLFW_GAMEPAD_BUTTON_DPAD_UP, 10);
+            mapButton.run(ImGuiKey.GamepadDpadDown, GLFW_GAMEPAD_BUTTON_DPAD_DOWN, 12);
+            mapButton.run(ImGuiKey.GamepadL1, GLFW_GAMEPAD_BUTTON_LEFT_BUMPER, 4);
+            mapButton.run(ImGuiKey.GamepadR1, GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER, 5);
+            mapAnalog.run(ImGuiKey.GamepadL2, GLFW_GAMEPAD_AXIS_LEFT_TRIGGER, 4, -0.75f, +1.0f);
+            mapAnalog.run(ImGuiKey.GamepadR2, GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER, 5, -0.75f, +1.0f);
+            mapButton.run(ImGuiKey.GamepadL3, GLFW_GAMEPAD_BUTTON_LEFT_THUMB, 8);
+            mapButton.run(ImGuiKey.GamepadR3, GLFW_GAMEPAD_BUTTON_RIGHT_THUMB, 9);
+            mapAnalog.run(ImGuiKey.GamepadLStickLeft, GLFW_GAMEPAD_AXIS_LEFT_X, 0, -0.25f, -1.0f);
+            mapAnalog.run(ImGuiKey.GamepadLStickRight, GLFW_GAMEPAD_AXIS_LEFT_X, 0, +0.25f, +1.0f);
+            mapAnalog.run(ImGuiKey.GamepadLStickUp, GLFW_GAMEPAD_AXIS_LEFT_Y, 1, -0.25f, -1.0f);
+            mapAnalog.run(ImGuiKey.GamepadLStickDown, GLFW_GAMEPAD_AXIS_LEFT_Y, 1, +0.25f, +1.0f);
+            mapAnalog.run(ImGuiKey.GamepadRStickLeft, GLFW_GAMEPAD_AXIS_RIGHT_X, 2, -0.25f, -1.0f);
+            mapAnalog.run(ImGuiKey.GamepadRStickRight, GLFW_GAMEPAD_AXIS_RIGHT_X, 2, +0.25f, +1.0f);
+            mapAnalog.run(ImGuiKey.GamepadRStickUp, GLFW_GAMEPAD_AXIS_RIGHT_Y, 3, -0.25f, -1.0f);
+            mapAnalog.run(ImGuiKey.GamepadRStickDown, GLFW_GAMEPAD_AXIS_RIGHT_Y, 3, +0.25f, +1.0f);
+        }
     }
 
     protected void updateMonitors() {
@@ -925,25 +925,6 @@ public class ImGuiWindowImpl {
         }
     }
 
-    // - On Windows the process needs to be marked DPI-aware. You can call SetProcessDPIAware() or call ImGui_ImplWin32_EnableDpiAwareness() from Win32 backend.
-    // - Apple platforms use FramebufferScale so we always return 1.0f.
-    // - Some accessibility applications are declaring virtual monitors with a DPI of 0.0f, see #7902. We preserve this value for caller to handle.
-    public static float getContentScaleForWindow(final long window) {
-        if (IS_APPLE) {
-            return 1.0f;
-        }
-        if (glfwHasGetPlatform && glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
-            return 1.0f;
-        }
-        if (glfwHasPerMonitorDpi) {
-            final float[] xScale = new float[1];
-            final float[] yScale = new float[1];
-            glfwGetWindowContentScale(window, xScale, yScale);
-            return xScale[0];
-        }
-        return 1.0f;
-    }
-
     public static float getContentScaleForMonitor(final long monitor) {
         if (IS_APPLE) {
             return 1.0f;
@@ -993,8 +974,24 @@ public class ImGuiWindowImpl {
         }
     }
 
+    private void updateViewports() {
+        final ImGuiIO io = ImGui.getIO();
+
+        final boolean viewportsRequested = io.hasBackendFlags(ImGuiBackendFlags.PlatformHasViewports) && io.hasConfigFlags(ImGuiConfigFlags.ViewportsEnable);
+        if (viewportsRequested != this.data.viewportEnable) {
+            this.data.viewportEnable = viewportsRequested;
+            if (viewportsRequested) {
+                this.initPlatformInterface();
+            } else {
+                this.shutdownPlatformInterface();
+            }
+        }
+    }
+
     public void newFrame(final RenderTarget renderTarget) {
         final ImGuiIO io = ImGui.getIO();
+
+        this.updateViewports();
 
         // Setup main viewport size (every frame to accommodate for window resizing)
         this.getWindowSizeAndFramebufferScale(renderTarget, this.data.window, this.props.tmpDisplaySize, this.props.tmpFbScale);
@@ -1032,12 +1029,11 @@ public class ImGuiWindowImpl {
     private static final class ViewportData {
         long window = -1;
         boolean windowOwned = false;
-        int ignoreWindowPosEventFrame = -1;
-        int ignoreWindowSizeEventFrame = -1;
+        long ignoreWindowPosEventFrame = -1;
+        long ignoreWindowSizeEventFrame = -1;
     }
 
-    private void windowCloseCallback(final long windowId) {
-        final ImGuiViewport vp = ImGui.findViewportByPlatformHandle(windowId);
+    private void windowCloseCallback(final ImGuiViewport vp) {
         if (vp.isValidPtr()) {
             vp.setPlatformRequestClose(true);
         }
@@ -1049,15 +1045,14 @@ public class ImGuiWindowImpl {
     // - on Linux it is queued and invoked during glfwPollEvents()
     // Because the event doesn't always fire on glfwSetWindowXXX() we use a frame counter tag to only
     // ignore recent glfwSetWindowXXX() calls.
-    private void windowPosCallback(final long windowId, final int xPos, final int yPos) {
-        final ImGuiViewport vp = ImGui.findViewportByPlatformHandle(windowId);
+    private void windowPosCallback(final ImGuiViewport vp, final int xPos, final int yPos) {
         if (vp.isNotValidPtr()) {
             return;
         }
 
         final ViewportData vd = (ViewportData) vp.getPlatformUserData();
         if (vd != null) {
-            final boolean ignoreEvent = (ImGui.getFrameCount() <= vd.ignoreWindowPosEventFrame + 1);
+            final boolean ignoreEvent = (this.bridge.getFrame() <= vd.ignoreWindowPosEventFrame + 1);
             if (ignoreEvent) {
                 return;
             }
@@ -1066,15 +1061,14 @@ public class ImGuiWindowImpl {
         vp.setPlatformRequestMove(true);
     }
 
-    private void windowSizeCallback(final long windowId, final int width, final int height) {
-        final ImGuiViewport vp = ImGui.findViewportByPlatformHandle(windowId);
+    private void windowSizeCallback(final ImGuiViewport vp, final int width, final int height) {
         if (vp.isNotValidPtr()) {
             return;
         }
 
         final ViewportData vd = (ViewportData) vp.getPlatformUserData();
         if (vd != null) {
-            final boolean ignoreEvent = (ImGui.getFrameCount() <= vd.ignoreWindowSizeEventFrame + 1);
+            final boolean ignoreEvent = (this.bridge.getFrame() <= vd.ignoreWindowSizeEventFrame + 1);
             if (ignoreEvent) {
                 return;
             }
@@ -1132,9 +1126,9 @@ public class ImGuiWindowImpl {
             glfwSetScrollCallback(vd.window, ImGuiWindowImpl.this::scrollCallback);
             glfwSetKeyCallback(vd.window, ImGuiWindowImpl.this::keyCallback);
             glfwSetCharCallback(vd.window, ImGuiWindowImpl.this::charCallback);
-            glfwSetWindowCloseCallback(vd.window, ImGuiWindowImpl.this::windowCloseCallback);
-            glfwSetWindowPosCallback(vd.window, ImGuiWindowImpl.this::windowPosCallback);
-            glfwSetWindowSizeCallback(vd.window, ImGuiWindowImpl.this::windowSizeCallback);
+            glfwSetWindowCloseCallback(vd.window, window -> ImGuiWindowImpl.this.windowCloseCallback(vp));
+            glfwSetWindowPosCallback(vd.window, (window, xpos, ypos) -> ImGuiWindowImpl.this.windowPosCallback(vp, xpos, ypos));
+            glfwSetWindowSizeCallback(vd.window, (window, width, height) -> ImGuiWindowImpl.this.windowSizeCallback(vp, width, height));
 
             if (ImGuiWindowImpl.this.data.clientApi == GlfwClientApi.OPENGL) {
                 glfwMakeContextCurrent(vd.window);
@@ -1213,13 +1207,19 @@ public class ImGuiWindowImpl {
     }
 
     private static final class SetWindowPosFunction extends ImPlatformFuncViewportImVec2 {
+        private final ImGuiHandler bridge;
+
+        private SetWindowPosFunction(ImGuiHandler bridge) {
+            this.bridge = bridge;
+        }
+
         @Override
         public void accept(final ImGuiViewport vp, final ImVec2 value) {
             final ViewportData vd = (ViewportData) vp.getPlatformUserData();
             if (vd == null) {
                 return;
             }
-            vd.ignoreWindowPosEventFrame = ImGui.getFrameCount();
+            vd.ignoreWindowPosEventFrame = this.bridge.getFrame();
             glfwSetWindowPos(vd.window, (int) value.x, (int) value.y);
         }
     }
@@ -1370,7 +1370,7 @@ public class ImGuiWindowImpl {
         platformIO.setPlatformDestroyWindow(new DestroyWindowFunction());
         platformIO.setPlatformShowWindow(new ShowWindowFunction());
         platformIO.setPlatformGetWindowPos(new GetWindowPosFunction());
-        platformIO.setPlatformSetWindowPos(new SetWindowPosFunction());
+        platformIO.setPlatformSetWindowPos(new SetWindowPosFunction(this.bridge));
         platformIO.setPlatformGetWindowSize(new GetWindowSizeFunction());
         platformIO.setPlatformSetWindowSize(new SetWindowSizeFunction());
         platformIO.setPlatformSetWindowTitle(new SetWindowTitleFunction());

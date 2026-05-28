@@ -1,24 +1,20 @@
 package foundry.imgui.impl;
 
+import static org.lwjgl.glfw.GLFW.glfwGetCurrentContext;
+import static org.lwjgl.glfw.GLFW.glfwMakeContextCurrent;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import foundry.imgui.impl.font.ImGuiFontManager;
 import foundry.imgui.impl.platform.ImGuiMCPlatform;
 import foundry.imgui.impl.renderer.ImGuiRenderer;
 import imgui.ImGui;
-import imgui.ImGuiStyle;
 import imgui.extension.implot.ImPlot;
 import imgui.extension.implot.ImPlotContext;
 import imgui.flag.ImGuiConfigFlags;
-import imgui.flag.ImGuiStyleVar;
 import imgui.internal.ImGuiContext;
 import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.ApiStatus;
-
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import static org.lwjgl.glfw.GLFW.glfwGetCurrentContext;
-import static org.lwjgl.glfw.GLFW.glfwMakeContextCurrent;
 
 @ApiStatus.Internal
 public class ImGuiHandler {
@@ -31,6 +27,7 @@ public class ImGuiHandler {
     private final ImPlotContext imPlotContext;
     private final AtomicBoolean active;
     private final AtomicBoolean fontsDirty;
+    private long frame;
 
     public ImGuiHandler(final long mainWindow) {
         this.mainWindow = mainWindow;
@@ -94,6 +91,7 @@ public class ImGuiHandler {
         try {
             this.start();
 
+            this.frame++;
             if (this.active.get()) {
                 ImGuiMCImpl.LOGGER.error("ImGui failed to render previous frame, disposing");
                 ImGui.endFrame();
@@ -172,5 +170,9 @@ public class ImGuiHandler {
 
     public long getWindow() {
         return this.mainWindow;
+    }
+
+    public long getFrame() {
+        return this.frame;
     }
 }
