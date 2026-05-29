@@ -446,6 +446,10 @@ public class ImGuiRenderImplRenderSystem implements ImGuiRenderer {
                     // Apply scissor/clipping rectangle (Y is inverted in OpenGL)
                     final int minX = Math.max((int) clipMinX, 0);
                     final int minY = Math.max((int) (fbHeight - clipMaxY), 0);
+                    if (width < minX || height < minY) {
+                        continue;
+                    }
+
                     final int scissorWidth = Math.clamp((int) (clipMaxX - clipMinX), 0, width - minX);
                     final int scissorHeight = Math.clamp((int) (clipMaxY - clipMinY), 0, height - minY);
                     renderPass.enableScissor(minX, minY, scissorWidth, scissorHeight);
