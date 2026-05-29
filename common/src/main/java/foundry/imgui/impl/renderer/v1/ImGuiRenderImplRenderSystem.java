@@ -636,7 +636,7 @@ public class ImGuiRenderImplRenderSystem implements ImGuiRenderer {
             //? if >=26.2-pre-2 {
             /^final Optional<org.joml.Vector4fc> clearColor = vp.hasFlags(ImGuiViewportFlags.NoRendererClear) ? Optional.empty() : Optional.of(CLEAR_COLOR);
             ^///? } else {
-            final OptionalInt clearColor = vp.hasFlags(ImGuiViewportFlags.NoRendererClear) ? OptionalInt.of(0xFFFF00FF) : OptionalInt.of(0);
+            final OptionalInt clearColor = vp.hasFlags(ImGuiViewportFlags.NoRendererClear) ? OptionalInt.empty() : OptionalInt.of(0);
              //? }
 
             final ViewportData data = ImGuiWindowImpl.getRenderData(vp, ViewportData::new);

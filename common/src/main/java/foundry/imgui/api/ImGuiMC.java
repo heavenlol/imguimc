@@ -6,8 +6,13 @@ import foundry.imgui.impl.ActiveContextImpl;
 import foundry.imgui.impl.ImGuiMCImpl;
 import foundry.imgui.impl.font.ImGuiFontManager;
 import imgui.*;
+import net.minecraft.client.StringSplitter;
 import net.minecraft.client.renderer.texture.AbstractTexture;
+import net.minecraft.locale.Language;
+import net.minecraft.network.chat.FormattedText;
+import net.minecraft.network.chat.Style;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.FormattedCharSequence;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.Nullable;
 
@@ -98,6 +103,7 @@ public interface ImGuiMC {
     }
 
     //? if >= 1.21.6 {
+
     /*/^*
      * Converts the specified gpu texture into a texture provider. The texture <strong>must</strong> be a 2D texture.
      *
@@ -122,6 +128,76 @@ public interface ImGuiMC {
         return (ImGuiSampler) sampler;
     }
     *///? }
+
+    /**
+     * Fully renders Minecraft text into ImGui.
+     *
+     * @param text The text to render
+     * @since 2.0.0
+     */
+    static void component(final FormattedText text) {
+        component(text, Float.POSITIVE_INFINITY);
+    }
+
+    /**
+     * Fully renders wrapped Minecraft text into ImGui.
+     *
+     * @param text      The text to render
+     * @param wrapWidth The width to wrap to
+     * @since 2.0.0
+     */
+    static void component(final FormattedText text, final float wrapWidth) {
+        ImGuiMCImpl.IM_GUI_CHAR_SINK.setup();
+        for (final FormattedCharSequence part : Language.getInstance().getVisualOrder(ImGuiMCImpl.IM_GUI_SPLITTER.splitLines(text, (int) wrapWidth, Style.EMPTY))) {
+            part.accept(ImGuiMCImpl.IM_GUI_CHAR_SINK);
+            ImGuiMCImpl.IM_GUI_CHAR_SINK.finish();
+            ImGui.newLine();
+        }
+        ImGuiMCImpl.IM_GUI_CHAR_SINK.reset();
+    }
+
+    /**
+     * Retrieves the ImGui font to use for the specified Minecraft style.
+     *
+     * @param style The style to get the font for
+     * @return The ImFont to use
+     * @since 2.0.0
+     */
+    static ImFont getStyleFont(final Style style) {
+        //? if >=1.21.9 {
+        /*final ResourceLocation fontName;
+        if (net.minecraft.network.chat.FontDescription.DEFAULT.equals(style.getFont())) {
+            fontName = FONT_JETBRAINS_MONO;
+        } else if (style.getFont() instanceof net.minecraft.network.chat.FontDescription.Resource(final ResourceLocation id)) {
+            fontName = id;
+        } else {
+            fontName = FONT_JETBRAINS_MONO;
+        }
+        return getFont(fontName, style.isBold(), style.isItalic());
+        *///? } else {
+        return getFont(Style.DEFAULT_FONT.equals(style.getFont()) ? null : style.getFont(), style.isBold(), style.isItalic());
+         //? }
+    }
+
+    /**
+     * Retrieves the ARGB color for the specified ImGui style color.
+     *
+     * @param color The ImGui color index
+     * @return The ARGB ImGui color
+     * @since 2.0.0
+     */
+    static int getColor(final int color) {
+        final ImVec4 colors = ImGui.getStyle().getColors()[color];
+        return (int) (colors.w * 255) << 24 | (int) (colors.x * 255) << 16 | (int) (colors.y * 255) << 8 | (int) (colors.z * 255);
+    }
+
+    /**
+     * @return A string splitter for ImGui fonts
+     * @since 2.0.0
+     */
+    static StringSplitter getStringSplitter() {
+        return ImGuiMCImpl.IM_GUI_SPLITTER;
+    }
 
     static void image(
             final ImGuiTextureProvider userTexture,

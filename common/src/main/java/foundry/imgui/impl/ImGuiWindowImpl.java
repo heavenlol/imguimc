@@ -1210,7 +1210,7 @@ public class ImGuiWindowImpl {
 
             //? if >=26.2-pre-2 {
             /*vd.windowSurface = com.mojang.blaze3d.systems.RenderSystem.getDevice().createSurface(vd.window);
-            *///? }
+             *///? }
 
             vp.setPlatformHandle(vd.window);
             ImGuiWindowImpl.setRawPlatformHandle(vp, vd.window);
@@ -1228,9 +1228,6 @@ public class ImGuiWindowImpl {
             glfwSetWindowCloseCallback(vd.window, window -> ImGuiWindowImpl.this.windowCloseCallback(vp));
             glfwSetWindowPosCallback(vd.window, (window, xpos, ypos) -> ImGuiWindowImpl.this.windowPosCallback(vp, xpos, ypos));
             glfwSetWindowSizeCallback(vd.window, (window, width, height) -> ImGuiWindowImpl.this.windowSizeCallback(vp, width, height));
-            glfwSetWindowRefreshCallback(vd.window, window -> {
-
-            });
         }
     }
 
@@ -1521,24 +1518,24 @@ public class ImGuiWindowImpl {
                 }
             }
             *///? } else {
-                final long oldContext;
-                if (this.data.clientApi == GlfwClientApi.OPENGL) {
-                    oldContext = glfwGetCurrentContext();
-                    glfwMakeContextCurrent(vd.window);
-                } else {
-                    oldContext = 0;
-                }
+            final long oldContext;
+            if (this.data.clientApi == GlfwClientApi.OPENGL) {
+                oldContext = glfwGetCurrentContext();
+                glfwMakeContextCurrent(vd.window);
+            } else {
+                oldContext = 0;
+            }
 
-                /*//? if >= 1.21.5 {
-                viewportData.getRenderTarget().blitToScreen();
-                 //? } else {
-                /^viewportData.getRenderTarget().blitToScreen((int) vp.getSizeX(), (int) vp.getSizeY());
-                ^///? }
+            //? if >= 1.21.5 {
+            /*viewportData.getRenderTarget().blitToScreen();
+            *///? } else {
+            viewportData.getRenderTarget().blitToScreen((int) vp.getSizeX(), (int) vp.getSizeY());
+            //? }
 
-                if (this.data.clientApi == GlfwClientApi.OPENGL) {
-                    glfwMakeContextCurrent(oldContext);
-                }
-                *///? }
+            if (this.data.clientApi == GlfwClientApi.OPENGL) {
+                glfwMakeContextCurrent(oldContext);
+            }
+            //? }
         }
     }
 
