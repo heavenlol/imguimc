@@ -1,1 +1,5 @@
-- Fix incorrect glsl for lower OpenGL drivers
+- Add `ImGuiLoadEvents.Pre` and `ImGuiLoadEvents.Post`. Platform flags can be configured during `ImGuiLoadEvents.Pre` before ImGui is initialized.
+- Fix `RegisterImGuiFontsEvent` not being fired on NeoForge
+- Update ImGui to `1.92.7`
+- Add support for docking and viewports
+- Add support for 26.2-pre-2
