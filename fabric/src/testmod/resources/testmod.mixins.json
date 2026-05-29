@@ -5,8 +5,7 @@
   "refmap": "testmod.refmap.json",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "GlDeviceMixin",
-    "MutableBufferStorageMixin"
+    "GlDeviceMixin"
   ],
   "injectors": {
     "defaultRequire": 1

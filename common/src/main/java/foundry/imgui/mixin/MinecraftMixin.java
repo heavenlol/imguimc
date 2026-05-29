@@ -37,6 +37,18 @@ public class MinecraftMixin {
     public void endFrame(final CallbackInfo ci) {
         if (ImGuiMCImpl.handler != null) {
             ImGuiMCImpl.handler.endFrame();
+            //? if <26.2-pre-2 {
+            ImGuiMCImpl.handler.swapBuffers();
+            //? }
         }
     }
+
+    //? if >=26.2-pre-2 {
+    /*@Inject(method = "renderFrame", at=@At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/CommandEncoder;submit()V", shift = At.Shift.AFTER))
+    public void swapBuffers(final CallbackInfo ci) {
+        if (ImGuiMCImpl.handler != null) {
+            ImGuiMCImpl.handler.swapBuffers();
+        }
+    }
+    *///? }
 }

@@ -35,7 +35,7 @@ public final class ImGuiMCImpl {
     }
 
     public static RenderTarget getMainRenderTarget() {
-        //? if >= 26.2-snapshot-3 {
+        //? if >= 26.2-pre-2 {
         /*return Minecraft.getInstance().gameRenderer.mainRenderTarget();
         *///? } else {
         return Minecraft.getInstance().getMainRenderTarget();

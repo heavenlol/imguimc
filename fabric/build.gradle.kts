@@ -29,6 +29,7 @@ loom {
             client()
             source(sourceSets.named("testmod").get())
 
+            programArgs("--vulkanValidation", "--tracy", "--renderDebugLabels")
             environmentVariable("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1")
             environmentVariable("LD_PRELOAD", "librenderdoc.so")
         }

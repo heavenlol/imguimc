@@ -2,8 +2,6 @@ package foundry.imgui.impl;
 
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.system.MemoryUtil.NULL;
-import com.mojang.blaze3d.opengl.GlStateManager;
-import com.mojang.blaze3d.pipeline.MainTarget;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.platform.Window;
 import imgui.*;
@@ -995,14 +993,14 @@ public class ImGuiWindowImpl {
         }
     }
 
-    private void updateViewports(final RenderTarget mainRenderTarget) {
+    private void updateViewports() {
         final ImGuiIO io = ImGui.getIO();
 
         final boolean viewportsRequested = io.hasBackendFlags(ImGuiBackendFlags.PlatformHasViewports) && io.hasConfigFlags(ImGuiConfigFlags.ViewportsEnable);
         if (viewportsRequested != this.data.viewportEnable) {
             this.data.viewportEnable = viewportsRequested;
             if (viewportsRequested) {
-                this.initPlatformInterface(mainRenderTarget);
+                this.initPlatformInterface();
             } else {
                 this.shutdownPlatformInterface();
             }
@@ -1012,7 +1010,7 @@ public class ImGuiWindowImpl {
     public void newFrame(final RenderTarget mainRenderTarget) {
         final ImGuiIO io = ImGui.getIO();
 
-        this.updateViewports(mainRenderTarget);
+        this.updateViewports();
 
         // Setup main viewport size (every frame to accommodate for window resizing)
         this.getWindowSizeAndFramebufferScale(mainRenderTarget, this.data.window, this.props.tmpDisplaySize, this.props.tmpFbScale);
@@ -1041,28 +1039,9 @@ public class ImGuiWindowImpl {
         return this.props.displayW == width && this.props.displayH == height;
     }
 
-    private static @Nullable RenderTarget getRenderTarget(final ImGuiViewport vp) {
-        if (vp.getPlatformUserData() == null) {
-            return null;
-        }
-        final RenderTarget renderTarget = ((ViewportData) vp.getPlatformUserData()).renderTarget;
-
-        final int width = (int) vp.getSizeX();
-        final int height = (int) vp.getSizeY();
-        if (renderTarget.width != width || renderTarget.height != height) {
-            //? if >= 1.21.2 {
-            /*renderTarget.resize(width, height);
-            *///? } else {
-            renderTarget.resize(width, height, Minecraft.ON_OSX);
-             //? }
-        }
-        return renderTarget;
-    }
-
     @SuppressWarnings("unchecked")
     public static <T extends RenderViewportData> @Nullable T getRenderData(final ImGuiViewport vp, final Supplier<T> factory) {
-        final RenderTarget renderTarget = getRenderTarget(vp);
-        if (renderTarget == null) {
+        if (vp.getPlatformUserData() == null) {
             return null;
         }
 
@@ -1070,13 +1049,22 @@ public class ImGuiWindowImpl {
         if (data.viewportData == null) {
             data.viewportData = factory.get();
         }
-        data.viewportData.setRenderTarget(renderTarget);
         return (T) data.viewportData;
     }
 
+    //? if >=26.2-pre-2 {
+    /*public static @Nullable com.mojang.blaze3d.systems.GpuSurface getSurface(final ImGuiViewport vp) {
+        if (vp.getPlatformUserData() == null) {
+            return null;
+        }
+
+        return ((ViewportData) vp.getPlatformUserData()).windowSurface;
+    }
+    *///? }
+
     public interface RenderViewportData extends NativeResource {
 
-        void setRenderTarget(final RenderTarget target);
+        RenderTarget getRenderTarget();
     }
 
     //--------------------------------------------------------------------------------------------------------
@@ -1087,8 +1075,12 @@ public class ImGuiWindowImpl {
 
     private static final class ViewportData {
         long window = -1;
-        RenderTarget renderTarget;
         RenderViewportData viewportData;
+        //? if >=26.2-pre-2 {
+        /*com.mojang.blaze3d.systems.GpuSurface windowSurface;
+        boolean windowSurfaceNeedsReconfiguring = true;
+        boolean surfaceIsInvalid = true;
+        *///? }
         boolean windowOwned = false;
         long ignoreWindowPosEventFrame = -1;
         long ignoreWindowSizeEventFrame = -1;
@@ -1192,7 +1184,6 @@ public class ImGuiWindowImpl {
             }
 
             final long shareWindow = (ImGuiWindowImpl.this.data.clientApi == GlfwClientApi.OPENGL) ? ImGuiWindowImpl.this.data.window : NULL;
-            vd.renderTarget = new MainTarget((int) vp.getSizeX(), (int) vp.getSizeY());
             vd.windowOwned = true;
 
             //? if >=26.1 {
@@ -1217,6 +1208,10 @@ public class ImGuiWindowImpl {
                     shareWindow);
             //? }
 
+            //? if >=26.2-pre-2 {
+            /*vd.windowSurface = com.mojang.blaze3d.systems.RenderSystem.getDevice().createSurface(vd.window);
+            *///? }
+
             vp.setPlatformHandle(vd.window);
             ImGuiWindowImpl.setRawPlatformHandle(vp, vd.window);
 
@@ -1233,6 +1228,9 @@ public class ImGuiWindowImpl {
             glfwSetWindowCloseCallback(vd.window, window -> ImGuiWindowImpl.this.windowCloseCallback(vp));
             glfwSetWindowPosCallback(vd.window, (window, xpos, ypos) -> ImGuiWindowImpl.this.windowPosCallback(vp, xpos, ypos));
             glfwSetWindowSizeCallback(vd.window, (window, width, height) -> ImGuiWindowImpl.this.windowSizeCallback(vp, width, height));
+            glfwSetWindowRefreshCallback(vd.window, window -> {
+
+            });
         }
     }
 
@@ -1241,32 +1239,40 @@ public class ImGuiWindowImpl {
         public void accept(final ImGuiViewport vp) {
             final ViewportData vd = (ViewportData) vp.getPlatformUserData();
 
-            if (vd != null && vd.windowOwned) {
-                // In C++ (Win32, !GLFW_HAS_MOUSE_PASSTHROUGH && GLFW_HAS_WINDOW_HOVERED): RemovePropA(hwnd, "IMGUI_VIEWPORT").
-                // In Java: no WndProc hook means there is no prop to remove — see follow-up in review.md.
-                if (!glfwHasMousePassthrough && glfwHasWindowHovered && IS_WINDOWS) {
-                    // intentionally empty — see comment above.
-                }
-
-                // Release any keys that were pressed in the window being destroyed and are still held down,
-                // because we will not receive any release events after window is destroyed.
-                for (int i = 0; i < ImGuiWindowImpl.this.data.keyOwnerWindows.length; i++) {
-                    if (ImGuiWindowImpl.this.data.keyOwnerWindows[i] == vd.window) {
-                        ImGuiWindowImpl.this.keyCallback(vd.window, i, 0, GLFW_RELEASE, 0); // Later params are only used for main viewport, on which this function is never called.
+            if (vd != null) {
+                if (vd.windowOwned) {
+                    // In C++ (Win32, !GLFW_HAS_MOUSE_PASSTHROUGH && GLFW_HAS_WINDOW_HOVERED): RemovePropA(hwnd, "IMGUI_VIEWPORT").
+                    // In Java: no WndProc hook means there is no prop to remove — see follow-up in review.md.
+                    if (!glfwHasMousePassthrough && glfwHasWindowHovered && IS_WINDOWS) {
+                        // intentionally empty — see comment above.
                     }
+
+                    // Release any keys that were pressed in the window being destroyed and are still held down,
+                    // because we will not receive any release events after window is destroyed.
+                    for (int i = 0; i < ImGuiWindowImpl.this.data.keyOwnerWindows.length; i++) {
+                        if (ImGuiWindowImpl.this.data.keyOwnerWindows[i] == vd.window) {
+                            ImGuiWindowImpl.this.keyCallback(vd.window, i, 0, GLFW_RELEASE, 0); // Later params are only used for main viewport, on which this function is never called.
+                        }
+                    }
+
+                    Callbacks.glfwFreeCallbacks(vd.window);
+                    glfwDestroyWindow(vd.window);
+
+                    vd.window = -1;
                 }
 
-                if (vd.renderTarget != null) {
-                    vd.renderTarget.destroyBuffers();
-                    vd.renderTarget = null;
+                if (vd.viewportData != null) {
+                    vd.viewportData.free();
+                    vd.viewportData = null;
                 }
 
-                Callbacks.glfwFreeCallbacks(vd.window);
-                glfwDestroyWindow(vd.window);
-
-                vd.window = -1;
+                //? if >=26.2-pre-2 {
+                /*if (vd.windowSurface != null) {
+                    vd.windowSurface.close();
+                    vd.windowSurface = null;
+                }
+                *///? }
             }
-
 
             vp.setPlatformHandle(-1);
             vp.setPlatformUserData(null);
@@ -1434,12 +1440,6 @@ public class ImGuiWindowImpl {
         }
     }
 
-    private static final class RenderWindowFunction extends ImPlatformFuncViewport {
-        @Override
-        public void accept(final ImGuiViewport vp) {
-        }
-    }
-
     private static final class SwapBuffersFunction extends ImPlatformFuncViewport {
         private final Data data;
 
@@ -1450,7 +1450,57 @@ public class ImGuiWindowImpl {
         @Override
         public void accept(final ImGuiViewport vp) {
             final ViewportData vd = (ViewportData) vp.getPlatformUserData();
-            if (vd != null) {
+            if (vd == null) {
+                return;
+            }
+
+            final RenderViewportData viewportData = vd.viewportData;
+            if (viewportData == null) {
+                return;
+            }
+
+            //? if >= 26.2-pre-2 {
+            /*if (vd.windowSurface.isAcquired()) {
+                return;
+            }
+
+            if (vd.windowSurfaceNeedsReconfiguring || vd.surfaceIsInvalid || vd.windowSurface.isSuboptimal()) {
+                final int width;
+                final int height;
+                try (final MemoryStack stack = MemoryStack.stackPush()) {
+                    final IntBuffer w = stack.mallocInt(1);
+                    final IntBuffer h = stack.mallocInt(1);
+                    GLFW.glfwGetFramebufferSize(vd.window, w, h);
+                    width = w.get(0);
+                    height = h.get(0);
+                }
+                if (width != 0 || height != 0) {
+                    final com.mojang.blaze3d.systems.GpuSurface.PresentMode presentMode =
+                            com.mojang.blaze3d.systems.GpuSurface.PresentMode.getSupportedVsyncMode(vd.windowSurface.supportedPresentModes(), true);
+                    final com.mojang.blaze3d.systems.GpuSurface.Configuration config = new com.mojang.blaze3d.systems.GpuSurface.Configuration(width, height, presentMode);
+
+                    try {
+                        vd.windowSurface.configure(config);
+                        vd.windowSurfaceNeedsReconfiguring = false;
+                        vd.surfaceIsInvalid = false;
+                    } catch (final com.mojang.blaze3d.systems.SurfaceException exception) {
+                        ImGuiMCImpl.LOGGER.warn("Couldn't configure surface to {}: {}", config, exception);
+                        vd.surfaceIsInvalid = true;
+                    }
+                }
+            }
+
+            if (!vd.surfaceIsInvalid && !vp.hasFlags(ImGuiViewportFlags.IsMinimized)) {
+                try {
+                    vd.windowSurface.acquireNextTexture();
+                } catch (final com.mojang.blaze3d.systems.SurfaceException ex) {
+                    ImGuiMCImpl.LOGGER.warn("Couldn't acquire next surface texture with config {}: {}", vd.windowSurface.currentConfiguration(), ex);
+                    vd.surfaceIsInvalid = true;
+                    vd.windowSurfaceNeedsReconfiguring = true;
+                }
+            }
+
+            if (vd.windowSurface.isAcquired()) {
                 final long oldContext;
                 if (this.data.clientApi == GlfwClientApi.OPENGL) {
                     oldContext = glfwGetCurrentContext();
@@ -1459,20 +1509,40 @@ public class ImGuiWindowImpl {
                     oldContext = 0;
                 }
 
-                //? if >= 1.21.5 {
-                /*vd.renderTarget.blitToScreen();
-                *///? } else {
-                vd.renderTarget.blitToScreen((int) vp.getSizeX(), (int) vp.getSizeY());
-                 //? }
+                final com.mojang.blaze3d.textures.GpuTextureView colorTexture = viewportData.getRenderTarget().getColorTextureView();
+                if (colorTexture == null) {
+                    throw new IllegalStateException("Can't blit to screen, color texture doesn't exist yet");
+                }
+
+                vd.windowSurface.blitFromTexture(com.mojang.blaze3d.systems.RenderSystem.getDevice().createCommandEncoder(), colorTexture);
+
                 if (this.data.clientApi == GlfwClientApi.OPENGL) {
-                    glfwSwapBuffers(vd.window);
                     glfwMakeContextCurrent(oldContext);
                 }
             }
+            *///? } else {
+                final long oldContext;
+                if (this.data.clientApi == GlfwClientApi.OPENGL) {
+                    oldContext = glfwGetCurrentContext();
+                    glfwMakeContextCurrent(vd.window);
+                } else {
+                    oldContext = 0;
+                }
+
+                /*//? if >= 1.21.5 {
+                viewportData.getRenderTarget().blitToScreen();
+                 //? } else {
+                /^viewportData.getRenderTarget().blitToScreen((int) vp.getSizeX(), (int) vp.getSizeY());
+                ^///? }
+
+                if (this.data.clientApi == GlfwClientApi.OPENGL) {
+                    glfwMakeContextCurrent(oldContext);
+                }
+                *///? }
         }
     }
 
-    protected void initPlatformInterface(final RenderTarget mainRenderTarget) {
+    protected void initPlatformInterface() {
         // In C++: when GLFW_HAS_VULKAN is set, Platform_CreateVkSurface is registered — a helper for the Vulkan renderer.
         // In Java: the Vulkan branch is intentionally omitted (no Vulkan binding in this project).
         // In C++ (1.92+): Platform_GetWindowFramebufferScale is installed on ImGuiPlatformIO for per-viewport DPI.
@@ -1492,7 +1562,6 @@ public class ImGuiWindowImpl {
         platformIO.setPlatformGetWindowFocus(new GetWindowFocusFunction());
         platformIO.setPlatformGetWindowMinimized(new GetWindowMinimizedFunction());
         platformIO.setPlatformSetWindowAlpha(new SetWindowAlphaFunction());
-        platformIO.setPlatformRenderWindow(new RenderWindowFunction());
         platformIO.setPlatformSwapBuffers(new SwapBuffersFunction(this.data));
 
         // Register main window handle (which is owned by the main application, not by us)
@@ -1500,7 +1569,6 @@ public class ImGuiWindowImpl {
         final ImGuiViewport mainViewport = ImGui.getMainViewport();
         final ViewportData vd = new ViewportData();
         vd.window = this.data.window;
-        vd.renderTarget = mainRenderTarget;
         vd.windowOwned = false;
         mainViewport.setPlatformUserData(vd);
         mainViewport.setPlatformHandle(this.data.window);
