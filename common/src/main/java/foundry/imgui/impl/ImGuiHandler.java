@@ -1,6 +1,7 @@
 package foundry.imgui.impl;
 
 import static org.lwjgl.glfw.GLFW.*;
+import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.systems.RenderSystem;
 import foundry.imgui.impl.font.ImGuiFontManager;
@@ -143,12 +144,9 @@ public class ImGuiHandler {
             ImGuiMCPlatform.INSTANCE.drawImGuiPost();
 
             ImGui.render();
-            this.rendererImpl.renderDrawData(ImGui.getDrawData(), ImGuiMCImpl.getMainRenderTarget());
-
-            if (ImGui.getIO().hasConfigFlags(ImGuiConfigFlags.ViewportsEnable)) {
-                ImGui.updatePlatformWindows();
-                ImGui.renderPlatformWindowsDefault();
-            }
+            final RenderTarget renderTarget = ImGuiMCImpl.getMainRenderTarget();
+            this.rendererImpl.renderDrawData(ImGui.getDrawData(), renderTarget);
+            this.rendererImpl.renderPlatformWindows(renderTarget);
         } finally {
             this.stop();
         }

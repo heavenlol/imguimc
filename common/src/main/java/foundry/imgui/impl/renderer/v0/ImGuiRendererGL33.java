@@ -5,8 +5,10 @@ package foundry.imgui.impl.renderer.v0;
 import static org.lwjgl.opengl.GL33C.*;
 import static org.lwjgl.opengl.GL45C.GL_CLIP_ORIGIN;
 import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.pipeline.TextureTarget;
 import foundry.imgui.api.ImGuiSampler;
 import foundry.imgui.api.ImGuiTextureProvider;
+import foundry.imgui.impl.ImGuiWindowImpl;
 import foundry.imgui.impl.renderer.ImGuiRenderer;
 import imgui.*;
 import imgui.callback.ImPlatformFuncViewport;
@@ -260,7 +262,19 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
     }
 
     @Override
-    public void renderDrawData(final ImDrawData drawData, final RenderTarget renderTarget) {
+    public void renderDrawData(final ImDrawData drawData, final RenderTarget mainRenderTarget) {
+        this._renderDrawData(drawData);
+    }
+
+    @Override
+    public void renderPlatformWindows(final RenderTarget mainRenderTarget) {
+        ImGuiRenderer.super.renderPlatformWindows(mainRenderTarget);
+        //? if <1.21.5 {
+        mainRenderTarget.bindWrite(true);
+        //? }
+    }
+
+    private void _renderDrawData(final ImDrawData drawData) {
         // Avoid rendering when minimized, scale coordinates for retina displays (screen coordinates != framebuffer coordinates)
         final int fbWidth = (int) (drawData.getDisplaySizeX() * drawData.getFramebufferScaleX());
         final int fbHeight = (int) (drawData.getDisplaySizeY() * drawData.getFramebufferScaleY());
@@ -437,7 +451,6 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
         }
         glViewport(this.props.lastViewport[0], this.props.lastViewport[1], this.props.lastViewport[2], this.props.lastViewport[3]);
         glScissor(this.props.lastScissorBox[0], this.props.lastScissorBox[1], this.props.lastScissorBox[2], this.props.lastScissorBox[3]);
-
     }
 
     @Override
@@ -533,7 +546,7 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
         final int[] lastVertexArray = new int[1];
         glGetIntegerv(GL_TEXTURE_BINDING_2D, lastTexture);
         glGetIntegerv(GL_ARRAY_BUFFER_BINDING, lastArrayBuffer);
-        if (data.glVersion >= 210) {
+        if (this.data.glVersion >= 210) {
             glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, lastPixelUnpackBuffer);
             glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
         }
@@ -555,44 +568,44 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
         final int vertHandle = glCreateShader(GL_VERTEX_SHADER);
         glShaderSource(vertHandle, vertexShader);
         glCompileShader(vertHandle);
-        checkShader(vertHandle, "vertex shader");
+        this.checkShader(vertHandle, "vertex shader");
 
         final int fragHandle = glCreateShader(GL_FRAGMENT_SHADER);
         glShaderSource(fragHandle, fragmentShader);
         glCompileShader(fragHandle);
-        checkShader(fragHandle, "fragment shader");
+        this.checkShader(fragHandle, "fragment shader");
 
         // Link
-        data.shaderHandle = glCreateProgram();
-        glAttachShader(data.shaderHandle, vertHandle);
-        glAttachShader(data.shaderHandle, fragHandle);
-        glLinkProgram(data.shaderHandle);
-        checkProgram(data.shaderHandle);
+        this.data.shaderHandle = glCreateProgram();
+        glAttachShader(this.data.shaderHandle, vertHandle);
+        glAttachShader(this.data.shaderHandle, fragHandle);
+        glLinkProgram(this.data.shaderHandle);
+        this.checkProgram(this.data.shaderHandle);
 
-        glDetachShader(data.shaderHandle, vertHandle);
-        glDetachShader(data.shaderHandle, fragHandle);
+        glDetachShader(this.data.shaderHandle, vertHandle);
+        glDetachShader(this.data.shaderHandle, fragHandle);
         glDeleteShader(vertHandle);
         glDeleteShader(fragHandle);
 
-        data.attribLocationTex = glGetUniformLocation(data.shaderHandle, "Texture");
-        data.attribLocationProjMtx = glGetUniformLocation(data.shaderHandle, "ProjMtx");
-        data.attribLocationVtxPos = glGetAttribLocation(data.shaderHandle, "Position");
-        data.attribLocationVtxUV = glGetAttribLocation(data.shaderHandle, "UV");
-        data.attribLocationVtxColor = glGetAttribLocation(data.shaderHandle, "Color");
+        this.data.attribLocationTex = glGetUniformLocation(this.data.shaderHandle, "Texture");
+        this.data.attribLocationProjMtx = glGetUniformLocation(this.data.shaderHandle, "ProjMtx");
+        this.data.attribLocationVtxPos = glGetAttribLocation(this.data.shaderHandle, "Position");
+        this.data.attribLocationVtxUV = glGetAttribLocation(this.data.shaderHandle, "UV");
+        this.data.attribLocationVtxColor = glGetAttribLocation(this.data.shaderHandle, "Color");
 
         // Create buffers
-        data.vboHandle = glGenBuffers();
-        data.elementsHandle = glGenBuffers();
+        this.data.vboHandle = glGenBuffers();
+        this.data.elementsHandle = glGenBuffers();
 
         // In C++: the font texture is now created lazily through ImGui_ImplOpenGL3_UpdateTexture(WantCreate),
         //         driven by the platform_io.Textures iteration in RenderDrawData.
         // In Java: ImTextureData is not exposed in imgui-binding (follow-up); keep the legacy createFontsTexture call here.
-        createFontsTexture();
+        this.createFontsTexture();
 
         // Restore modified GL state
         glBindTexture(GL_TEXTURE_2D, lastTexture[0]);
         glBindBuffer(GL_ARRAY_BUFFER, lastArrayBuffer[0]);
-        if (data.glVersion >= 210) {
+        if (this.data.glVersion >= 210) {
             glBindBuffer(GL_PIXEL_UNPACK_BUFFER, lastPixelUnpackBuffer[0]);
         }
         glBindVertexArray(lastVertexArray[0]);
@@ -614,6 +627,59 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
         this.destroyFontsTexture();
     }
 
+    /**
+     * Data class to store implementation specific fields.
+     * Same as {@code ImGui_ImplOpenGL3_Data}.
+     */
+    protected static class ViewportData implements ImGuiWindowImpl.RenderViewportData {
+        protected RenderTarget renderTarget;
+        protected boolean ownedRenderTarget;
+        //? if >=1.21.5 {
+        /*protected int drawFramebuffer;
+         *///? }
+
+        public void updateRenderTarget(final ImGuiViewport viewport) {
+            final int width = (int) viewport.getSizeX();
+            final int height = (int) viewport.getSizeY();
+            if (this.renderTarget == null) {
+                //? if >=1.21.5 {
+                /*this.renderTarget = new TextureTarget("ImGui Window", width, height, false);
+                *///? } else if >=1.21.2 {
+                /*this.renderTarget = new TextureTarget(width, height, false);
+                 *///? } else {
+                this.renderTarget = new TextureTarget(width, height, false, net.minecraft.client.Minecraft.ON_OSX);
+                //? }
+                this.ownedRenderTarget = true;
+            } else if (this.ownedRenderTarget && (this.renderTarget.width != width || this.renderTarget.height != height)) {
+                //? if >=1.21.2 {
+                /*this.renderTarget.resize(width, height);
+                 *///? } else {
+                this.renderTarget.resize(width, height, net.minecraft.client.Minecraft.ON_OSX);
+                //? }
+            }
+        }
+
+        @Override
+        public RenderTarget getRenderTarget() {
+            return this.renderTarget;
+        }
+
+        @Override
+        public void free() {
+            if (this.renderTarget != null) {
+                if (this.ownedRenderTarget) {
+                    this.renderTarget.destroyBuffers();
+                }
+                this.renderTarget = null;
+            }
+            //? if >=1.21.5 {
+            /*if (this.drawFramebuffer != 0) {
+                glDeleteFramebuffers(this.drawFramebuffer);
+            }
+            *///? }
+        }
+    }
+
     //--------------------------------------------------------------------------------------------------------
     // MULTI-VIEWPORT / PLATFORM INTERFACE SUPPORT
     // This is an _advanced_ and _optional_ feature, allowing the backend to create and handle multiple viewports simultaneously.
@@ -623,11 +689,33 @@ public class ImGuiRendererGL33 implements ImGuiRenderer {
     private final class RendererRenderWindowFunction extends ImPlatformFuncViewport {
         @Override
         public void accept(final ImGuiViewport vp) {
-            if (!vp.hasFlags(ImGuiViewportFlags.NoRendererClear)) {
-                glClearColor(0, 0, 0, 1);
-                glClear(GL_COLOR_BUFFER_BIT);
+            final ViewportData data = ImGuiWindowImpl.getRenderData(vp, ViewportData::new);
+            if (data != null) {
+                data.updateRenderTarget(vp);
+                final RenderTarget renderTarget = data.getRenderTarget();
+
+                //? if >=1.21.5 {
+                /*final com.mojang.blaze3d.textures.GpuTexture texture = renderTarget.getColorTexture();
+                final java.util.OptionalInt clearColor = vp.hasFlags(ImGuiViewportFlags.NoRendererClear) ? java.util.OptionalInt.empty() : java.util.OptionalInt.of(0xFF000000);
+
+                try (final com.mojang.blaze3d.systems.RenderPass renderPass = com.mojang.blaze3d.systems.RenderSystem.getDevice().createCommandEncoder().createRenderPass(
+                        texture,
+                        clearColor
+                )) {
+                    ImGuiRendererGL33.this._renderDrawData(vp.getDrawData());
+                }
+                *///? } else {
+                renderTarget.bindWrite(false);
+                if (!vp.hasFlags(ImGuiViewportFlags.NoRendererClear)) {
+                    //? if >=1.21.2 {
+                    /*com.mojang.blaze3d.platform.GlStateManager._clear(GL_COLOR_BUFFER_BIT);
+                     *///? } else {
+                    com.mojang.blaze3d.platform.GlStateManager._clear(GL_COLOR_BUFFER_BIT, Minecraft.ON_OSX);
+                    //? }
+                }
+                ImGuiRendererGL33.this._renderDrawData(vp.getDrawData());
+                //? }
             }
-            ImGuiRendererGL33.this.renderDrawData(vp.getDrawData(), Minecraft.getInstance().getMainRenderTarget());
         }
     }
 

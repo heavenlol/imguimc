@@ -1274,6 +1274,7 @@ public class ImGuiWindowImpl {
             }
 
             vp.setPlatformHandle(-1);
+            vp.setPlatformHandleRaw(-1);
             vp.setPlatformUserData(null);
         }
     }
@@ -1528,10 +1529,10 @@ public class ImGuiWindowImpl {
                 oldContext = 0;
             }
 
-            //? if >= 1.21.5 {
+            //? if >=1.21.5 {
             /*viewportData.getRenderTarget().blitToScreen();
-             *///? } else {
-            viewportData.getRenderTarget().blitToScreen((int) vp.getSizeX(), (int) vp.getSizeY());
+            *///? } else {
+            foundry.imgui.impl.renderer.OpenGLPresentation.get().presentToScreen(viewportData.getRenderTarget());
             //? }
 
             if (this.data.clientApi == GlfwClientApi.OPENGL) {

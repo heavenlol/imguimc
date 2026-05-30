@@ -215,10 +215,10 @@ public class ImGuiRenderImplRenderSystem implements ImGuiRenderer {
                 this.renderTarget = new MainTarget(width, height);
             } else if (this.renderTarget.width != width || this.renderTarget.height != height) {
                 //? if >= 1.21.2 {
-                /^this.renderTarget.resize(width, height);
-                ^///? } else {
-                this.renderTarget.resize(width, height, Minecraft.ON_OSX);
-                 //? }
+                this.renderTarget.resize(width, height);
+                //? } else {
+                /^this.renderTarget.resize(width, height, Minecraft.ON_OSX);
+                 ^///? }
             }
             this.ownedRenderTarget = true;
         }
