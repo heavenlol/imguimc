@@ -226,6 +226,7 @@ public class ImGuiFontManagerImpl implements ImGuiFontManager {
                 final float sizePixels = data.size * scale;
                 fontConfig.setGlyphRanges(data.ranges);
                 fontConfig.setName(this.name.getPath() + " " + type + " " + FONT_FORMAT.format(sizePixels) + " px");
+                fontConfig.setPixelSnapH(true);
                 return ImGui.getIO().getFonts().addFontFromMemoryTTF(data.bytes, sizePixels, fontConfig);
             }
         }
