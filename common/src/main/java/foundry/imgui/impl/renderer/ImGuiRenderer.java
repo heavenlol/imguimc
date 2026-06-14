@@ -26,6 +26,9 @@ public interface ImGuiRenderer extends NativeResource {
         }
     }
 
+    default void postDraw() {
+    }
+
     void discard();
 
     void recreateFontsTexture();

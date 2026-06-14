@@ -147,6 +147,7 @@ public class ImGuiHandler {
             final RenderTarget renderTarget = ImGuiMCImpl.getMainRenderTarget();
             this.rendererImpl.renderDrawData(ImGui.getDrawData(), renderTarget);
             this.rendererImpl.renderPlatformWindows(renderTarget);
+            this.rendererImpl.postDraw();
         } finally {
             this.stop();
         }

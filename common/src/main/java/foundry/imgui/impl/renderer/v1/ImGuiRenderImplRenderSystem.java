@@ -314,14 +314,12 @@ public class ImGuiRenderImplRenderSystem implements ImGuiRenderer {
         final int fbWidth = (int) (drawData.getDisplaySizeX() * drawData.getFramebufferScaleX());
         final int fbHeight = (int) (drawData.getDisplaySizeY() * drawData.getFramebufferScaleY());
         if (fbWidth <= 0 || fbHeight <= 0) {
-            this.clearTextures();
             data.clearVertexData(0);
             return;
         }
 
         final int cmdListsCount = drawData.getCmdListsCount();
         if (cmdListsCount <= 0) {
-            this.clearTextures();
             data.clearVertexData(0);
             return;
         }
@@ -481,8 +479,6 @@ public class ImGuiRenderImplRenderSystem implements ImGuiRenderer {
                 }
             }
         }
-
-        this.clearTextures();
     }
 
     @Override
@@ -515,6 +511,11 @@ public class ImGuiRenderImplRenderSystem implements ImGuiRenderer {
         ^///? } else {
         this.renderDrawData(drawData, this.data.mainViewportData, OptionalInt.empty());
          //? }
+    }
+
+    @Override
+    public void postDraw() {
+        this.clearTextures();
     }
 
     @Override
