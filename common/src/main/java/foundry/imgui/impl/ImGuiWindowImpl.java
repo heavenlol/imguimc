@@ -45,7 +45,7 @@ public class ImGuiWindowImpl {
         protected long window = -1;
         //? if >= 26.1 {
         /*protected com.mojang.blaze3d.systems.GpuBackend backend = null;
-         *///? }
+        *///? }
         protected GlfwClientApi clientApi = GlfwClientApi.UNKNOWN;
         protected double time = 0.0;
         protected long mouseWindow = -1;
@@ -574,7 +574,7 @@ public class ImGuiWindowImpl {
         this.data.window = ImGuiMCImpl.getWindowHandle(window);
         //? if >= 26.1 {
         /*this.data.backend = window.backend();
-         *///? }
+        *///? }
         this.data.time = 0.0;
         this.data.isWayland = isWayland();
 
@@ -1054,7 +1054,7 @@ public class ImGuiWindowImpl {
         return (T) data.viewportData;
     }
 
-    //? if >=26.2-pre-2 {
+    //? if >=26.2 {
     /*public static @Nullable com.mojang.blaze3d.systems.GpuSurface getSurface(final ImGuiViewport vp) {
         if (vp.getPlatformUserData() == null) {
             return null;
@@ -1078,7 +1078,7 @@ public class ImGuiWindowImpl {
     private static final class ViewportData {
         long window = -1;
         RenderViewportData viewportData;
-        //? if >=26.2-pre-2 {
+        //? if >=26.2 {
         /*com.mojang.blaze3d.systems.GpuSurface windowSurface;
         boolean windowSurfaceNeedsReconfiguring = true;
         boolean surfaceIsInvalid = true;
@@ -1176,8 +1176,9 @@ public class ImGuiWindowImpl {
 
     private final class CreateWindowFunction extends ImPlatformFuncViewport {
         @Override
-        public void accept(final ImGuiViewport vp) {
+        public void accept(final ImGuiViewport imguiVp) {
             final ViewportData vd = new ViewportData();
+            final ImGuiViewport vp = new ImGuiViewport(imguiVp.ptr);
             vp.setPlatformUserData(vd);
 
             // Workaround for Linux: ignore mouse up events corresponding to losing focus of the previously focused window (#7733, #3158, #7922)
@@ -1210,9 +1211,9 @@ public class ImGuiWindowImpl {
                     shareWindow);
             //? }
 
-            //? if >=26.2-pre-2 {
+            //? if >=26.2 {
             /*vd.windowSurface = com.mojang.blaze3d.systems.RenderSystem.getDevice().createSurface(vd.window);
-             *///? }
+            *///? }
 
             vp.setPlatformHandle(vd.window);
             ImGuiWindowImpl.setRawPlatformHandle(vp, vd.window);
@@ -1230,6 +1231,9 @@ public class ImGuiWindowImpl {
             glfwSetWindowCloseCallback(vd.window, window -> ImGuiWindowImpl.this.windowCloseCallback(vp));
             glfwSetWindowPosCallback(vd.window, (window, xpos, ypos) -> ImGuiWindowImpl.this.windowPosCallback(vp, xpos, ypos));
             glfwSetWindowSizeCallback(vd.window, (window, width, height) -> ImGuiWindowImpl.this.windowSizeCallback(vp, width, height));
+            //? if >=26.2 {
+            /*glfwSetFramebufferSizeCallback(vd.window, (window, width, height) -> vd.windowSurfaceNeedsReconfiguring = true);
+            *///? }
         }
     }
 
@@ -1265,7 +1269,7 @@ public class ImGuiWindowImpl {
                     vd.viewportData = null;
                 }
 
-                //? if >=26.2-pre-2 {
+                //? if >=26.2 {
                 /*if (vd.windowSurface != null) {
                     vd.windowSurface.close();
                     vd.windowSurface = null;
@@ -1459,7 +1463,7 @@ public class ImGuiWindowImpl {
                 return;
             }
 
-            //? if >= 26.2-pre-2 {
+            //? if >= 26.2 {
             /*if (vd.windowSurface.isAcquired()) {
                 return;
             }

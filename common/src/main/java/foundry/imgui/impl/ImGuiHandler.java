@@ -49,7 +49,7 @@ public class ImGuiHandler {
             ImGuiMCPlatform.INSTANCE.imGuiLoadPre();
             this.rendererImpl.init();
             //? if >=1.21.6 {
-            /*//? if >=26.2-pre-2 {
+            /*//? if >=26.2 {
             /^final String backendName = RenderSystem.getDevice().getDeviceInfo().backendName().toLowerCase(java.util.Locale.ROOT);
             ^///? } else {
             final String backendName = RenderSystem.getDevice().getBackendName().toLowerCase(java.util.Locale.ROOT);
@@ -178,7 +178,7 @@ public class ImGuiHandler {
             return;
         }
 
-        //? if >=26.2-pre-2 {
+        //? if >=26.2 {
         /*final com.mojang.blaze3d.systems.GpuSurface windowSurface = ImGuiWindowImpl.getSurface(viewport);
         if (windowSurface == null || !windowSurface.isAcquired()) {
             return;
@@ -188,7 +188,7 @@ public class ImGuiHandler {
         final ImGuiWindowImpl.GlfwClientApi clientApi = this.windowImpl.getClientApi();
         final long window = viewport.getPlatformHandle();
 
-        //? if >= 26.2-pre-2 {
+        //? if >= 26.2 {
         /*final long oldContext;
         if (clientApi == ImGuiWindowImpl.GlfwClientApi.OPENGL) {
             oldContext = glfwGetCurrentContext();

@@ -24,8 +24,13 @@ public class GlCommandEncoderMixin {
         this.imguimc$context = glfwGetCurrentContext();
     }
 
+    //? if >=26.2 {
+    /^@Inject(method = "presentTexture", at = @At("HEAD"), cancellable = true)
+    public void bindFramebufferTextures(final GpuTextureView gpuTextureView, final int swapchainWidth, final int swapchainHeight, final CallbackInfo ci) {
+    ^///? } else {
     @Inject(method = "presentTexture", at = @At("HEAD"), cancellable = true)
     public void bindFramebufferTextures(final GpuTextureView gpuTextureView, final CallbackInfo ci) {
+    //? }
         final long context = glfwGetCurrentContext();
         if (context == this.imguimc$context) {
             return;
@@ -36,6 +41,16 @@ public class GlCommandEncoderMixin {
         final int color0 = ((GlTexture) gpuTextureView.texture()).glId();
         final int width = gpuTextureView.getWidth(0);
         final int height = gpuTextureView.getHeight(0);
+
+        //? if >=26.2 {
+        /^final int destY = Math.max(0, swapchainHeight - height);
+        final int copyWidth = Math.min(swapchainWidth, width);
+        final int copyHeight = Math.min(swapchainHeight, height);
+        ^///? } else {
+        final int destY = 0;
+        final int copyWidth = width;
+        final int copyHeight = height;
+        //? }
 
         glDisable(GL_SCISSOR_TEST);
         glViewport(0, 0, width, height);
@@ -49,7 +64,7 @@ public class GlCommandEncoderMixin {
         glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER_BINDING, 0);
         glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color0, 0);
-        glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glBlitFramebuffer(0, 0, copyWidth, copyHeight, 0, destY, copyWidth, destY + copyHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, oldRead);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER_BINDING, oldWrite);
 

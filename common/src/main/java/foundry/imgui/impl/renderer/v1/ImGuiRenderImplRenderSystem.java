@@ -42,7 +42,7 @@ public class ImGuiRenderImplRenderSystem implements ImGuiRenderer {
     private static final VertexFormat VERTEX_FORMAT;
 
     static {
-        //? if >=26.2-pre-2 {
+        //? if >=26.2 {
         /^VERTEX_FORMAT = VertexFormat.builder(0)
                 .addAttribute("Position", com.mojang.blaze3d.GpuFormat.RG32_FLOAT)
                 .addAttribute("UV", com.mojang.blaze3d.GpuFormat.RG32_FLOAT)
@@ -112,7 +112,7 @@ public class ImGuiRenderImplRenderSystem implements ImGuiRenderer {
             .withLocation(ResourceLocation.fromNamespaceAndPath(ImGuiMC.MOD_ID, "pipeline/imgui"))
             .withVertexShader(ResourceLocation.fromNamespaceAndPath(ImGuiMC.MOD_ID, "shader_vertex"))
             .withFragmentShader(ResourceLocation.fromNamespaceAndPath(ImGuiMC.MOD_ID, "shader_fragment"))
-            //? if >=26.2-pre-2 {
+            //? if >=26.2 {
             /^.withBindGroupLayout(com.mojang.blaze3d.pipeline.BindGroupLayout.builder()
                     .withSampler("Texture")
                     .withUniform("Projection", UniformType.UNIFORM_BUFFER)
@@ -121,7 +121,7 @@ public class ImGuiRenderImplRenderSystem implements ImGuiRenderer {
             .withSampler("Texture")
             .withUniform("Projection", UniformType.UNIFORM_BUFFER)
             //? }
-            //? if >=26.2-pre-2 {
+            //? if >=26.2 {
             /^.withColorTargetState(new com.mojang.blaze3d.pipeline.ColorTargetState(BlendFunction.TRANSLUCENT))
             ^///? } else if >=26.1 {
             /^.withColorTargetState(new com.mojang.blaze3d.pipeline.ColorTargetState(Optional.of(BlendFunction.TRANSLUCENT), com.mojang.blaze3d.pipeline.ColorTargetState.WRITE_ALL))
@@ -129,13 +129,13 @@ public class ImGuiRenderImplRenderSystem implements ImGuiRenderer {
             .withBlend(BlendFunction.TRANSLUCENT)
              //? }
             .withCull(false)
-            //? if >=26.2-pre-2 {
+            //? if >=26.2 {
             /^.withVertexBinding(0, VERTEX_FORMAT)
             .withPrimitiveTopology(com.mojang.blaze3d.PrimitiveTopology.TRIANGLES)
             ^///? } else {
             .withVertexFormat(VERTEX_FORMAT, VertexFormat.Mode.TRIANGLES)
              //? }
-            //? if >=26.2-pre-2 {
+            //? if >=26.2 {
             /^.withDepthStencilState(Optional.empty())
             ^///? } else if >=26.1 {
             /^.withDepthStencilState(new com.mojang.blaze3d.pipeline.DepthStencilState(com.mojang.blaze3d.platform.CompareOp.ALWAYS_PASS, false))
@@ -296,7 +296,7 @@ public class ImGuiRenderImplRenderSystem implements ImGuiRenderer {
         }
     }
 
-    //? if >=26.2-pre-2 {
+    //? if >=26.2 {
     /^@SuppressWarnings("OptionalUsedAsFieldOrParameterType")
     private void renderDrawData(final ImDrawData drawData, final ViewportData data, final Optional<org.joml.Vector4fc> clearColor) {
         ^///? } else {
@@ -416,7 +416,7 @@ public class ImGuiRenderImplRenderSystem implements ImGuiRenderer {
                 final GpuBuffer vertexBuffer = data.vertexData.get(n);
                 final GpuBuffer indexBuffer = data.indexData.get(n);
 
-                //? if >=26.2-pre-2 {
+                //? if >=26.2 {
                 /^renderPass.setVertexBuffer(0, vertexBuffer.slice());
                 renderPass.setIndexBuffer(indexBuffer, data.elementSize == 2 ? com.mojang.blaze3d.IndexType.SHORT : com.mojang.blaze3d.IndexType.INT);
                 ^///? } else {
@@ -471,7 +471,7 @@ public class ImGuiRenderImplRenderSystem implements ImGuiRenderer {
                     renderPass.bindSampler("Texture", textureId == 1 ? this.data.fontTextureView : this.data.textures.get((int) (textureId - 2)));
                      //?}
 
-                    //? if >=26.2-pre-2 {
+                    //? if >=26.2 {
                     /^renderPass.drawIndexed(elemCount, 1, idxOffset, vtxOffset, 0);
                     ^///? } else {
                     renderPass.drawIndexed(vtxOffset, idxOffset, elemCount, 1);
@@ -506,7 +506,7 @@ public class ImGuiRenderImplRenderSystem implements ImGuiRenderer {
             this.data.mainViewportData = new ViewportData();
         }
         this.data.mainViewportData.renderTarget = renderTarget;
-        //? if >=26.2-pre-2 {
+        //? if >=26.2 {
         /^this.renderDrawData(drawData, this.data.mainViewportData, Optional.empty());
         ^///? } else {
         this.renderDrawData(drawData, this.data.mainViewportData, OptionalInt.empty());
@@ -641,13 +641,13 @@ public class ImGuiRenderImplRenderSystem implements ImGuiRenderer {
 
     private final class RendererRenderWindowFunction extends ImPlatformFuncViewport {
 
-        //? if >=26.2-pre-2 {
+        //? if >=26.2 {
         /^private static final org.joml.Vector4fc CLEAR_COLOR = new org.joml.Vector4f();
         ^///? }
 
         @Override
         public void accept(final ImGuiViewport vp) {
-            //? if >=26.2-pre-2 {
+            //? if >=26.2 {
             /^final Optional<org.joml.Vector4fc> clearColor = vp.hasFlags(ImGuiViewportFlags.NoRendererClear) ? Optional.empty() : Optional.of(CLEAR_COLOR);
             ^///? } else {
             final OptionalInt clearColor = vp.hasFlags(ImGuiViewportFlags.NoRendererClear) ? OptionalInt.empty() : OptionalInt.of(0);

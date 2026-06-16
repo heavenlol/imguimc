@@ -53,25 +53,25 @@ public final class ImGuiMCImpl {
     }
 
     public static RenderTarget getMainRenderTarget() {
-        //? if >= 26.2-pre-2 {
+        //? if >= 26.2 {
         /*return Minecraft.getInstance().gameRenderer.mainRenderTarget();
-         *///? } else {
+        *///? } else {
         return Minecraft.getInstance().getMainRenderTarget();
-        //? }
+         //? }
     }
 
     public static long getWindowHandle(final Window window) {
         //? if >=1.21.9 {
         /*return window.handle();
-         *///? } else {
+        *///? } else {
         return window.getWindow();
-        //? }
+         //? }
     }
 
     public static TextureTarget createRenderTarget(final int width, final int height, final boolean depth) {
-        //? if >=26.2-pre-2 {
+        //? if >=26.2 {
         /*return new TextureTarget("ImGui", width, height, depth, com.mojang.blaze3d.GpuFormat.RGBA8_UNORM);
-         *///? } else if >=1.21.5 {
+        *///? } else if >=1.21.5 {
         /*return new TextureTarget("ImGui", width, height, depth);
          *///? } else if >=1.21.2 {
         /*final TextureTarget renderTarget = new TextureTarget(width, height, depth);
@@ -89,8 +89,8 @@ public final class ImGuiMCImpl {
     public static void resizeRenderTarget(final RenderTarget renderTarget, final int width, final int height) {
         //? if >=1.21.2 {
         /*renderTarget.resize(width, height);
-         *///? } else {
+        *///? } else {
         renderTarget.resize(width, height, net.minecraft.client.Minecraft.ON_OSX);
-        //? }
+         //? }
     }
 }

@@ -47,7 +47,10 @@ stonecutter {
 //                "1.21.10",
                 "1.21.11"
             ).buildscript("mapped.build.gradle.kts")
-            versions("26.1", "26.2")
+            versions(
+                "26.1",
+                "26.2"
+            )
         }
         branch("neoforge") {
             versions(
@@ -62,7 +65,8 @@ stonecutter {
                 "1.21.9",
 //                "1.21.10",
                 "1.21.11",
-                "26.1"
+                "26.1",
+                "26.2"
             )
         }
     }

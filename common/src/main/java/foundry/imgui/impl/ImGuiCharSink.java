@@ -104,7 +104,7 @@ public class ImGuiCharSink implements FormattedCharSink {
                 }
 
                 if (minecraft.options.chatLinksPrompt().get()) {
-                    //? if >=26.2-pre-2 {
+                    //? if >=26.2 {
                     /^final Screen oldScreen = minecraft.gui.screen();
                     minecraft.gui.setScreen(new net.minecraft.client.gui.screens.ConfirmLinkScreen((confirm) -> {
                         if (confirm) {
@@ -138,7 +138,7 @@ public class ImGuiCharSink implements FormattedCharSink {
                     break;
                 }
 
-                //? if >=26.2-pre-2 {
+                //? if >=26.2 {
                 /^player.connection.sendUnattendedCommand(net.minecraft.commands.Commands.trimOptionalPrefix(cmd), minecraft.gui.screen());
                 ^///? } else if >=1.21.6 {
                 /^player.connection.sendUnattendedCommand(net.minecraft.commands.Commands.trimOptionalPrefix(cmd), minecraft.screen);
