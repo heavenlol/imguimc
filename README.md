@@ -14,3 +14,4 @@ This library provides the following:
 - Event for registering custom fonts
 - Automatic .ttf font loading for ImGui styles
 - Support for `GpuTexture` and `GpuTextureView` as texture sources
+
